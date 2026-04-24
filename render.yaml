@@ -1,20 +1,14 @@
 services:
   - type: web
     name: dev-web-ing1-api
-    env: java
-    plan: free
-    buildCommand: mvn -DskipTests clean package
-    startCommand: java -Dserver.port=$PORT -jar target/projet-1.0-SNAPSHOT.jar
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     autoDeploy: true
     healthCheckPath: /api/health
-    envVars:
-      - key: JAVA_VERSION
-        value: 21
 
   - type: web
     name: dev-web-ing1-web
-    env: static
-    plan: free
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
