@@ -113,10 +113,10 @@ Ouvrez http://localhost:5173 :
 
 ## Règles de collaboration
 
-Suivi du projet :
-- [SYNC_CONTEXT.md](SYNC_CONTEXT.md) — protocole
+Suivi projet dans ce repo :
 - [WORKLOG.md](WORKLOG.md) — journal chronologique (quoi changé / fichiers / bloquants / next)
 - [NEXT_TASKS.md](NEXT_TASKS.md) — backlog MVP
 - [DECISIONS.md](DECISIONS.md) — choix validés
+- [PLAN.md](PLAN.md) — plan d'exécution et jalons
 
 Jamais de secrets/tokens dans le repo.
