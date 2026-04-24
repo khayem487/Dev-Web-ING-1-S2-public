@@ -21,11 +21,11 @@
   - [x] **P1.6** Page `/` publique
   - [x] **P1.7** Page `/recherche` avec 3 filtres + debounce
 
-- [ ] **P2 Module Visualisation**
-  - [ ] Register/Login flow
-  - [ ] User profile (public/private fields)
-  - [ ] Search/consult objects + services (>=2 filters)
-  - [ ] Points and level update per action
+- [x] **P2 Module Visualisation**
+  - [x] Register/Login flow (session HTTP)
+  - [x] User profile (public/private fields)
+  - [x] Search/consult objects + services (>=2 filtres)
+  - [x] Points and level update per action (consult/search/update)
 
 - [ ] **P3 Module Gestion**
   - [ ] CRUD connected objects

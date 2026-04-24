@@ -29,7 +29,7 @@ Le module **Administration est volontairement exclu** (correction du prof).
 │   ├── package.json
 │   ├── vite.config.js      # proxy /api -> http://localhost:8080
 │   └── src/
-│       ├── App.jsx         # Router + pages / et /recherche
+│       ├── App.jsx         # Router + pages /, /recherche, /visualisation
 │       ├── App.css         # styles MVP
 │       └── index.jsx       # BrowserRouter mount
 └── .env.example
@@ -88,14 +88,17 @@ npm.cmd run dev
 ```
 Ouvrez http://localhost:5173 :
 - `/` affiche l'accueil public + état backend + KPIs.
-- `/recherche` affiche la recherche d'objets avec filtres combinables.
+- `/recherche` affiche la recherche d'objets (publique) avec filtres combinables.
+- `/visualisation` expose le module privé (register/login, profil, services, recherche filtrée, points/niveau).
 
 ## Tests manuels rapides
 
 - `curl http://localhost:8080/api/health` doit renvoyer `{"status":"UP",...}`.
 - `curl http://localhost:8080/api/info/pieces` doit renvoyer 6 pièces seedées.
 - `curl "http://localhost:8080/api/info/objets?type=Capteur&pieceId=1"` doit filtrer les objets.
-- Ouvrir http://localhost:5173 : la carte doit être verte (backend OK).
+- `POST /api/auth/register` puis `GET /api/visualisation/profile` (avec cookie session) doit répondre 200.
+- `GET /api/visualisation/objets?service=Surveillance&etat=ACTIF&pieceId=1` doit retourner un sous-ensemble.
+- Ouvrir http://localhost:5173 et vérifier `/visualisation`.
 
 ## Activer MySQL plus tard
 

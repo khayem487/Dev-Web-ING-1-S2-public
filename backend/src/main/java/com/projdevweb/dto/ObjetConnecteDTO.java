@@ -14,6 +14,7 @@ public record ObjetConnecteDTO(
         String marque,
         String type,
         String branche,
+        String service,
         Etat etat,
         Connectivite connectivite,
         Float batterie,
@@ -22,12 +23,14 @@ public record ObjetConnecteDTO(
 ) {
 
     public static ObjetConnecteDTO from(ObjetConnecte o) {
+        String branche = branche(o);
         return new ObjetConnecteDTO(
                 o.getId(),
                 o.getNom(),
                 o.getMarque(),
                 o.getClass().getSimpleName(),
-                branche(o),
+                branche,
+                service(branche),
                 o.getEtat(),
                 o.getConnectivite(),
                 o.getBatterie(),
@@ -42,5 +45,15 @@ public record ObjetConnecteDTO(
         if (o instanceof Appareil) return "Appareil";
         if (o instanceof BesoinAnimal) return "BesoinAnimal";
         return "ObjetConnecte";
+    }
+
+    private static String service(String branche) {
+        return switch (branche) {
+            case "Ouvrant" -> "Acces";
+            case "Capteur" -> "Surveillance";
+            case "Appareil" -> "Confort";
+            case "BesoinAnimal" -> "Animal";
+            default -> "General";
+        };
     }
 }

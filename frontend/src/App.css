@@ -18,6 +18,26 @@ a {
   text-decoration: none;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #111827;
+  color: white;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.92;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -63,7 +83,7 @@ a {
 }
 
 .app-main {
-  width: min(1100px, 100%);
+  width: min(1150px, 100%);
   margin: 0 auto;
   padding: 20px;
 }
@@ -96,7 +116,7 @@ a {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .kpi {
@@ -134,11 +154,12 @@ pre {
 .filters {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
 }
 
-.filters label {
+.filters label,
+.form-grid label {
   display: grid;
   gap: 6px;
   font-weight: 600;
@@ -146,17 +167,31 @@ pre {
 }
 
 .filters input,
-.filters select {
+.filters select,
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
   border: 1px solid #d1d5db;
   border-radius: 8px;
   padding: 8px 10px;
   font: inherit;
 }
 
+.form-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
 .results-grid {
   margin-top: 12px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
 }
 
@@ -180,4 +215,27 @@ pre {
   color: #3730a3;
   border-radius: 999px;
   padding: 3px 8px;
+}
+
+.row-between {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  background: #eef2ff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
 }

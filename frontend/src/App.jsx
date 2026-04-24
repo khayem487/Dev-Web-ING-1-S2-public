@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 
@@ -18,8 +18,13 @@ const TYPE_OPTIONS = [
     'Eau'
 ]
 
+const SERVICE_OPTIONS = ['', 'Acces', 'Surveillance', 'Confort', 'Animal']
+const ETAT_OPTIONS = ['', 'ACTIF', 'INACTIF']
+
 export default function App() {
     const [health, setHealth] = useState({ state: 'loading' })
+    const [sessionUser, setSessionUser] = useState(null)
+    const [sessionReady, setSessionReady] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -41,25 +46,51 @@ export default function App() {
         }
     }, [])
 
+    const refreshSession = useCallback(async () => {
+        try {
+            const me = await fetchJson('/api/auth/me')
+            setSessionUser(me)
+        } catch {
+            setSessionUser(null)
+        } finally {
+            setSessionReady(true)
+        }
+    }, [])
+
+    useEffect(() => {
+        refreshSession()
+    }, [refreshSession])
+
     return (
         <div className="app-shell">
             <header className="app-header">
                 <div>
                     <h1>Maison Intelligente</h1>
-                    <p>Projet Dev Web ING1 — module Information (MVP)</p>
+                    <p>Projet Dev Web ING1 — modules Information + Visualisation (MVP)</p>
                 </div>
                 <nav>
                     <NavLink to="/" end>
                         Accueil
                     </NavLink>
                     <NavLink to="/recherche">Recherche</NavLink>
+                    <NavLink to="/visualisation">Visualisation</NavLink>
                 </nav>
             </header>
 
             <main className="app-main">
                 <Routes>
-                    <Route path="/" element={<HomePage health={health} />} />
+                    <Route path="/" element={<HomePage health={health} sessionUser={sessionUser} />} />
                     <Route path="/recherche" element={<SearchPage />} />
+                    <Route
+                        path="/visualisation"
+                        element={
+                            <VisualisationPage
+                                sessionUser={sessionUser}
+                                sessionReady={sessionReady}
+                                onSessionRefresh={refreshSession}
+                            />
+                        }
+                    />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </main>
@@ -69,7 +100,7 @@ export default function App() {
     )
 }
 
-function HomePage({ health }) {
+function HomePage({ health, sessionUser }) {
     const [piecesCount, setPiecesCount] = useState(null)
     const [objetsCount, setObjetsCount] = useState(null)
 
@@ -77,8 +108,8 @@ function HomePage({ health }) {
         let cancelled = false
 
         Promise.all([
-            fetch('/api/info/pieces').then((r) => (r.ok ? r.json() : [])),
-            fetch('/api/info/objets').then((r) => (r.ok ? r.json() : []))
+            fetchJson('/api/info/pieces').catch(() => []),
+            fetchJson('/api/info/objets').catch(() => [])
         ])
             .then(([pieces, objets]) => {
                 if (cancelled) return
@@ -101,14 +132,20 @@ function HomePage({ health }) {
             <article className="card hero">
                 <h2>Visite publique de la maison</h2>
                 <p>
-                    Cette première version expose les informations de base d&apos;une maison intelligente
-                    (pièces + objets connectés) avec un moteur de recherche filtrable.
+                    Cette version expose les données de la maison intelligente (pièces + objets connectés)
+                    et active un module Visualisation avec authentification, profil et gamification.
                 </p>
                 <ul>
-                    <li>✅ P0 validé (backend + frontend connectés)</li>
-                    <li>✅ P1.1/P1.2/P1.3 backend validés</li>
-                    <li>➡️ Prochaine étape : enrichir l&apos;UI et les modules Visualisation/Gestion</li>
+                    <li>✅ Module Information terminé (P1)</li>
+                    <li>✅ Backend Visualisation en place (auth, profil, points/niveaux)</li>
+                    <li>➡️ Next: finaliser le module Gestion (CRUD complet)</li>
                 </ul>
+                {sessionUser && (
+                    <p className="ok">
+                        Connecté: {sessionUser.prenom} {sessionUser.nom} · Niveau {sessionUser.niveau} ·{' '}
+                        {sessionUser.points} pts
+                    </p>
+                )}
             </article>
 
             <article className="card">
@@ -156,11 +193,7 @@ function SearchPage() {
     }, [searchInput])
 
     useEffect(() => {
-        fetch('/api/info/pieces')
-            .then((r) => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`)
-                return r.json()
-            })
+        fetchJson('/api/info/pieces')
             .then((data) => setPieces(Array.isArray(data) ? data : []))
             .catch(() => setPieces([]))
     }, [])
@@ -176,11 +209,7 @@ function SearchPage() {
 
         const url = params.toString() ? `/api/info/objets?${params}` : '/api/info/objets'
 
-        fetch(url)
-            .then((r) => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`)
-                return r.json()
-            })
+        fetchJson(url)
             .then((data) => setItems(Array.isArray(data) ? data : []))
             .catch((err) => {
                 setItems([])
@@ -203,8 +232,8 @@ function SearchPage() {
     return (
         <section className="stack">
             <article className="card">
-                <h2>Recherche d&apos;objets connectés</h2>
-                <p>Filtres combinables : type, pièce, recherche texte (avec debounce 300ms).</p>
+                <h2>Recherche d&apos;objets connectés (public)</h2>
+                <p>Filtres combinables : type, pièce, recherche texte (debounce 300ms).</p>
 
                 <div className="filters">
                     <label>
@@ -244,34 +273,458 @@ function SearchPage() {
                 <small>{subtitle}</small>
             </article>
 
-            <article className="card">
-                <h3>Résultats</h3>
-                {loading && <p>Chargement...</p>}
-                {error && <p className="error">{error}</p>}
-
-                {!loading && !error && (
-                    <>
-                        <p>{items.length} objet(s) trouvé(s)</p>
-                        <div className="results-grid">
-                            {items.map((item) => (
-                                <article key={item.id} className="result-card">
-                                    <header>
-                                        <strong>{item.nom}</strong>
-                                        <span className="badge">{item.type}</span>
-                                    </header>
-                                    <p>
-                                        {item.marque || 'Marque inconnue'} · {item.pieceNom}
-                                    </p>
-                                    <p>
-                                        Branche: <strong>{item.branche}</strong> · État:{' '}
-                                        <strong>{item.etat}</strong>
-                                    </p>
-                                </article>
-                            ))}
-                        </div>
-                    </>
-                )}
-            </article>
+            <ResultsCard loading={loading} error={error} items={items} />
         </section>
     )
+}
+
+function VisualisationPage({ sessionUser, sessionReady, onSessionRefresh }) {
+    if (!sessionReady) {
+        return (
+            <section className="card">
+                <h2>Visualisation</h2>
+                <p>Chargement de la session...</p>
+            </section>
+        )
+    }
+
+    if (!sessionUser) {
+        return <AuthPanel onSessionRefresh={onSessionRefresh} />
+    }
+
+    return <VisualisationDashboard sessionUser={sessionUser} onSessionRefresh={onSessionRefresh} />
+}
+
+function AuthPanel({ onSessionRefresh }) {
+    const [registerForm, setRegisterForm] = useState({ prenom: '', nom: '', email: '', motDePasse: '' })
+    const [loginForm, setLoginForm] = useState({ email: '', motDePasse: '' })
+    const [message, setMessage] = useState('')
+    const [error, setError] = useState('')
+
+    const submitRegister = async (e) => {
+        e.preventDefault()
+        setError('')
+        setMessage('')
+        try {
+            await fetchJson('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify(registerForm)
+            })
+            setMessage('Compte créé et connecté ✅')
+            await onSessionRefresh()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const submitLogin = async (e) => {
+        e.preventDefault()
+        setError('')
+        setMessage('')
+        try {
+            await fetchJson('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify(loginForm)
+            })
+            setMessage('Connexion réussie ✅')
+            await onSessionRefresh()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    return (
+        <section className="stack">
+            <article className="card">
+                <h2>Module Visualisation (auth requis)</h2>
+                <p>
+                    Crée un compte ou connecte-toi pour accéder au profil, consulter les services et
+                    accumuler des points selon les actions.
+                </p>
+                {message && <p className="ok">{message}</p>}
+                {error && <p className="error">{error}</p>}
+            </article>
+
+            <div className="auth-grid">
+                <article className="card">
+                    <h3>Créer un compte</h3>
+                    <form className="form-grid" onSubmit={submitRegister}>
+                        <label>
+                            Prénom
+                            <input
+                                required
+                                value={registerForm.prenom}
+                                onChange={(e) => setRegisterForm((f) => ({ ...f, prenom: e.target.value }))}
+                            />
+                        </label>
+                        <label>
+                            Nom
+                            <input
+                                required
+                                value={registerForm.nom}
+                                onChange={(e) => setRegisterForm((f) => ({ ...f, nom: e.target.value }))}
+                            />
+                        </label>
+                        <label>
+                            Email
+                            <input
+                                type="email"
+                                required
+                                value={registerForm.email}
+                                onChange={(e) => setRegisterForm((f) => ({ ...f, email: e.target.value }))}
+                            />
+                        </label>
+                        <label>
+                            Mot de passe
+                            <input
+                                type="password"
+                                required
+                                minLength={4}
+                                value={registerForm.motDePasse}
+                                onChange={(e) => setRegisterForm((f) => ({ ...f, motDePasse: e.target.value }))}
+                            />
+                        </label>
+                        <button type="submit">Créer et se connecter</button>
+                    </form>
+                </article>
+
+                <article className="card">
+                    <h3>Se connecter</h3>
+                    <form className="form-grid" onSubmit={submitLogin}>
+                        <label>
+                            Email
+                            <input
+                                type="email"
+                                required
+                                value={loginForm.email}
+                                onChange={(e) => setLoginForm((f) => ({ ...f, email: e.target.value }))}
+                            />
+                        </label>
+                        <label>
+                            Mot de passe
+                            <input
+                                type="password"
+                                required
+                                value={loginForm.motDePasse}
+                                onChange={(e) => setLoginForm((f) => ({ ...f, motDePasse: e.target.value }))}
+                            />
+                        </label>
+                        <button type="submit">Connexion</button>
+                    </form>
+                </article>
+            </div>
+        </section>
+    )
+}
+
+function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
+    const [profile, setProfile] = useState(sessionUser)
+    const [profileForm, setProfileForm] = useState({
+        pseudo: '',
+        bioPublique: '',
+        telephonePrive: '',
+        adressePrivee: ''
+    })
+
+    const [pieces, setPieces] = useState([])
+    const [services, setServices] = useState([])
+    const [items, setItems] = useState([])
+
+    const [type, setType] = useState('')
+    const [service, setService] = useState('')
+    const [etat, setEtat] = useState('')
+    const [pieceId, setPieceId] = useState('')
+    const [searchInput, setSearchInput] = useState('')
+    const [query, setQuery] = useState('')
+
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+    const [saveMsg, setSaveMsg] = useState('')
+
+    useEffect(() => {
+        const timer = setTimeout(() => setQuery(searchInput.trim()), 300)
+        return () => clearTimeout(timer)
+    }, [searchInput])
+
+    const refreshProfile = useCallback(async () => {
+        const data = await fetchJson('/api/visualisation/profile')
+        setProfile(data)
+        setProfileForm({
+            pseudo: data.pseudo ?? '',
+            bioPublique: data.bioPublique ?? '',
+            telephonePrive: data.telephonePrive ?? '',
+            adressePrivee: data.adressePrivee ?? ''
+        })
+        await onSessionRefresh()
+    }, [onSessionRefresh])
+
+    useEffect(() => {
+        refreshProfile().catch((err) => setError(err.message))
+
+        fetchJson('/api/info/pieces')
+            .then((data) => setPieces(Array.isArray(data) ? data : []))
+            .catch(() => setPieces([]))
+
+        fetchJson('/api/visualisation/services')
+            .then((data) => setServices(Array.isArray(data) ? data : []))
+            .catch(() => setServices([]))
+    }, [refreshProfile])
+
+    useEffect(() => {
+        setLoading(true)
+        setError('')
+
+        const params = new URLSearchParams()
+        if (type) params.set('type', type)
+        if (service) params.set('service', service)
+        if (etat) params.set('etat', etat)
+        if (pieceId) params.set('pieceId', pieceId)
+        if (query) params.set('q', query)
+
+        const url = params.toString() ? `/api/visualisation/objets?${params}` : '/api/visualisation/objets'
+
+        fetchJson(url)
+            .then(async (data) => {
+                setItems(Array.isArray(data) ? data : [])
+                await onSessionRefresh()
+            })
+            .catch((err) => {
+                setItems([])
+                setError(err.message)
+            })
+            .finally(() => setLoading(false))
+    }, [type, service, etat, pieceId, query, onSessionRefresh])
+
+    const saveProfile = async (e) => {
+        e.preventDefault()
+        setSaveMsg('')
+        try {
+            const data = await fetchJson('/api/visualisation/profile', {
+                method: 'PUT',
+                body: JSON.stringify(profileForm)
+            })
+            setProfile(data)
+            setSaveMsg('Profil mis à jour ✅ (+5 points)')
+            await onSessionRefresh()
+        } catch (err) {
+            setSaveMsg(`Erreur: ${err.message}`)
+        }
+    }
+
+    const logout = async () => {
+        await fetchJson('/api/auth/logout', { method: 'POST' })
+        await onSessionRefresh()
+    }
+
+    return (
+        <section className="stack">
+            <article className="card">
+                <div className="row-between">
+                    <div>
+                        <h2>Visualisation privée</h2>
+                        <p>
+                            Bienvenue {profile?.prenom} {profile?.nom}.
+                        </p>
+                    </div>
+                    <button onClick={logout}>Se déconnecter</button>
+                </div>
+
+                <div className="kpi-grid">
+                    <article className="card kpi">
+                        <span>Niveau</span>
+                        <strong>{profile?.niveau ?? sessionUser.niveau}</strong>
+                    </article>
+                    <article className="card kpi">
+                        <span>Points</span>
+                        <strong>{profile?.points ?? sessionUser.points}</strong>
+                    </article>
+                </div>
+            </article>
+
+            <article className="card">
+                <h3>Profil (public / privé)</h3>
+                <form className="form-grid" onSubmit={saveProfile}>
+                    <label>
+                        Pseudo (public)
+                        <input
+                            value={profileForm.pseudo}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, pseudo: e.target.value }))}
+                        />
+                    </label>
+                    <label>
+                        Bio (publique)
+                        <textarea
+                            rows={3}
+                            value={profileForm.bioPublique}
+                            onChange={(e) => setProfileForm((f) => ({ ...f, bioPublique: e.target.value }))}
+                        />
+                    </label>
+                    <label>
+                        Téléphone (privé)
+                        <input
+                            value={profileForm.telephonePrive}
+                            onChange={(e) =>
+                                setProfileForm((f) => ({ ...f, telephonePrive: e.target.value }))
+                            }
+                        />
+                    </label>
+                    <label>
+                        Adresse (privée)
+                        <input
+                            value={profileForm.adressePrivee}
+                            onChange={(e) =>
+                                setProfileForm((f) => ({ ...f, adressePrivee: e.target.value }))
+                            }
+                        />
+                    </label>
+                    <button type="submit">Enregistrer profil</button>
+                </form>
+                {saveMsg && <p className={saveMsg.startsWith('Erreur') ? 'error' : 'ok'}>{saveMsg}</p>}
+            </article>
+
+            <article className="card">
+                <h3>Services disponibles</h3>
+                <div className="chips">
+                    {services.map((s) => (
+                        <span key={s.code} className="chip">
+                            {s.label}: {s.objets}
+                        </span>
+                    ))}
+                </div>
+            </article>
+
+            <article className="card">
+                <h3>Recherche objets (privée)</h3>
+                <p>Filtres combinables: service, type, état, pièce, texte.</p>
+
+                <div className="filters">
+                    <label>
+                        Service
+                        <select value={service} onChange={(e) => setService(e.target.value)}>
+                            {SERVICE_OPTIONS.map((opt) => (
+                                <option key={opt || 'all'} value={opt}>
+                                    {opt || 'Tous'}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label>
+                        Type
+                        <select value={type} onChange={(e) => setType(e.target.value)}>
+                            {TYPE_OPTIONS.map((opt) => (
+                                <option key={opt || 'all'} value={opt}>
+                                    {opt || 'Tous'}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label>
+                        État
+                        <select value={etat} onChange={(e) => setEtat(e.target.value)}>
+                            {ETAT_OPTIONS.map((opt) => (
+                                <option key={opt || 'all'} value={opt}>
+                                    {opt || 'Tous'}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label>
+                        Pièce
+                        <select value={pieceId} onChange={(e) => setPieceId(e.target.value)}>
+                            <option value="">Toutes</option>
+                            {pieces.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.nom}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label>
+                        Recherche
+                        <input
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            placeholder="Nom, marque, service..."
+                        />
+                    </label>
+                </div>
+            </article>
+
+            <ResultsCard loading={loading} error={error} items={items} />
+        </section>
+    )
+}
+
+function ResultsCard({ loading, error, items }) {
+    return (
+        <article className="card">
+            <h3>Résultats</h3>
+            {loading && <p>Chargement...</p>}
+            {error && <p className="error">{error}</p>}
+
+            {!loading && !error && (
+                <>
+                    <p>{items.length} objet(s) trouvé(s)</p>
+                    <div className="results-grid">
+                        {items.map((item) => (
+                            <article key={item.id} className="result-card">
+                                <header>
+                                    <strong>{item.nom}</strong>
+                                    <span className="badge">{item.type}</span>
+                                </header>
+                                <p>
+                                    {item.marque || 'Marque inconnue'} · {item.pieceNom}
+                                </p>
+                                <p>
+                                    Service: <strong>{item.service}</strong>
+                                </p>
+                                <p>
+                                    Branche: <strong>{item.branche}</strong> · État:{' '}
+                                    <strong>{item.etat}</strong>
+                                </p>
+                            </article>
+                        ))}
+                    </div>
+                </>
+            )}
+        </article>
+    )
+}
+
+async function fetchJson(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+        },
+        ...options
+    })
+
+    if (response.status === 204) {
+        return null
+    }
+
+    let payload = null
+    const text = await response.text()
+    if (text) {
+        try {
+            payload = JSON.parse(text)
+        } catch {
+            payload = text
+        }
+    }
+
+    if (!response.ok) {
+        const message =
+            (payload && typeof payload === 'object' && (payload.message || payload.error)) ||
+            `HTTP ${response.status}`
+        throw new Error(message)
+    }
+
+    return payload
 }
