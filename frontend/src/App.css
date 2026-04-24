@@ -239,3 +239,32 @@ pre {
   padding: 6px 10px;
   font-size: 0.9rem;
 }
+
+.inline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.inline-actions button {
+  background: #1f2937;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  display: grid;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.history-item small {
+  color: #6b7280;
+}

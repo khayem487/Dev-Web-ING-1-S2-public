@@ -27,11 +27,11 @@
   - [x] Search/consult objects + services (>=2 filtres)
   - [x] Points and level update per action (consult/search/update)
 
-- [ ] **P3 Module Gestion**
-  - [ ] CRUD connected objects
-  - [ ] Associate object to room
-  - [ ] Activate/deactivate + update object params
-  - [ ] Basic reports/statistics + history view
+- [x] **P3 Module Gestion**
+  - [x] CRUD connected objects
+  - [x] Associate object to room
+  - [x] Activate/deactivate + update object params
+  - [x] Basic reports/statistics + history view
 
 - [ ] **P4 Quality & Delivery**
   - [ ] Responsive checks (mobile/tablet/desktop)

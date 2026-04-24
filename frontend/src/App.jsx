@@ -20,6 +20,7 @@ const TYPE_OPTIONS = [
 
 const SERVICE_OPTIONS = ['', 'Acces', 'Surveillance', 'Confort', 'Animal']
 const ETAT_OPTIONS = ['', 'ACTIF', 'INACTIF']
+const GESTION_TYPE_OPTIONS = ['Porte', 'Volet', 'Thermostat', 'Camera', 'Television', 'LaveLinge', 'Nourriture', 'Eau']
 
 export default function App() {
     const [health, setHealth] = useState({ state: 'loading' })
@@ -66,7 +67,7 @@ export default function App() {
             <header className="app-header">
                 <div>
                     <h1>Maison Intelligente</h1>
-                    <p>Projet Dev Web ING1 — modules Information + Visualisation (MVP)</p>
+                    <p>Projet Dev Web ING1 — modules Information + Visualisation + Gestion (MVP)</p>
                 </div>
                 <nav>
                     <NavLink to="/" end>
@@ -74,6 +75,7 @@ export default function App() {
                     </NavLink>
                     <NavLink to="/recherche">Recherche</NavLink>
                     <NavLink to="/visualisation">Visualisation</NavLink>
+                    <NavLink to="/gestion">Gestion</NavLink>
                 </nav>
             </header>
 
@@ -85,6 +87,16 @@ export default function App() {
                         path="/visualisation"
                         element={
                             <VisualisationPage
+                                sessionUser={sessionUser}
+                                sessionReady={sessionReady}
+                                onSessionRefresh={refreshSession}
+                            />
+                        }
+                    />
+                    <Route
+                        path="/gestion"
+                        element={
+                            <GestionPage
                                 sessionUser={sessionUser}
                                 sessionReady={sessionReady}
                                 onSessionRefresh={refreshSession}
@@ -137,8 +149,9 @@ function HomePage({ health, sessionUser }) {
                 </p>
                 <ul>
                     <li>✅ Module Information terminé (P1)</li>
-                    <li>✅ Backend Visualisation en place (auth, profil, points/niveaux)</li>
-                    <li>➡️ Next: finaliser le module Gestion (CRUD complet)</li>
+                    <li>✅ Module Visualisation terminé (auth, profil, points/niveaux)</li>
+                    <li>✅ Module Gestion terminé (CRUD + stats + historique)</li>
+                    <li>➡️ Next: P4 qualité/livraison (responsive, accessibilité, démo)</li>
                 </ul>
                 {sessionUser && (
                     <p className="ok">
@@ -659,6 +672,397 @@ function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
     )
 }
 
+function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
+    const [pieces, setPieces] = useState([])
+    const [items, setItems] = useState([])
+    const [stats, setStats] = useState(null)
+    const [history, setHistory] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+    const [message, setMessage] = useState('')
+    const [editingId, setEditingId] = useState(null)
+    const [form, setForm] = useState(initialGestionForm())
+
+    const loadGestionData = useCallback(async () => {
+        setLoading(true)
+        setError('')
+        try {
+            const [piecesData, objetsData, statsData, historyData] = await Promise.all([
+                fetchJson('/api/info/pieces'),
+                fetchJson('/api/gestion/objets'),
+                fetchJson('/api/gestion/stats'),
+                fetchJson('/api/gestion/historique?limit=20')
+            ])
+            setPieces(Array.isArray(piecesData) ? piecesData : [])
+            setItems(Array.isArray(objetsData) ? objetsData : [])
+            setStats(statsData)
+            setHistory(Array.isArray(historyData) ? historyData : [])
+            await onSessionRefresh()
+        } catch (err) {
+            setError(err.message)
+        } finally {
+            setLoading(false)
+        }
+    }, [onSessionRefresh])
+
+    useEffect(() => {
+        if (sessionUser) {
+            loadGestionData()
+        }
+    }, [sessionUser, loadGestionData])
+
+    if (!sessionReady) {
+        return (
+            <section className="card">
+                <h2>Gestion</h2>
+                <p>Chargement de la session...</p>
+            </section>
+        )
+    }
+
+    if (!sessionUser) {
+        return (
+            <section className="card">
+                <h2>Gestion (auth requise)</h2>
+                <p>Connecte-toi sur l'onglet Visualisation pour accéder au CRUD objets.</p>
+            </section>
+        )
+    }
+
+    const submitGestionForm = async (e) => {
+        e.preventDefault()
+        setMessage('')
+        setError('')
+
+        try {
+            const payload = gestionPayloadFromForm(form)
+            if (editingId) {
+                await fetchJson(`/api/gestion/objets/${editingId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload)
+                })
+                setMessage('Objet mis à jour ✅')
+            } else {
+                await fetchJson('/api/gestion/objets', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                })
+                setMessage('Objet créé ✅')
+            }
+            setEditingId(null)
+            setForm(initialGestionForm())
+            await loadGestionData()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const startEdit = async (id) => {
+        setError('')
+        setMessage('')
+        try {
+            const detail = await fetchJson(`/api/gestion/objets/${id}`)
+            setEditingId(id)
+            setForm(formFromDetail(detail))
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const toggleEtat = async (item) => {
+        setError('')
+        try {
+            await fetchJson(`/api/gestion/objets/${item.id}/etat`, {
+                method: 'PATCH',
+                body: JSON.stringify({ actif: item.etat !== 'ACTIF' })
+            })
+            await loadGestionData()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    const deleteItem = async (id) => {
+        setError('')
+        setMessage('')
+        try {
+            await fetchJson(`/api/gestion/objets/${id}`, { method: 'DELETE' })
+            if (editingId === id) {
+                setEditingId(null)
+                setForm(initialGestionForm())
+            }
+            setMessage('Objet supprimé ✅')
+            await loadGestionData()
+        } catch (err) {
+            setError(err.message)
+        }
+    }
+
+    return (
+        <section className="stack">
+            <article className="card">
+                <h2>Gestion des objets connectés</h2>
+                <p>CRUD complet, association pièce, activation/désactivation, statistiques et historique.</p>
+                {message && <p className="ok">{message}</p>}
+                {error && <p className="error">{error}</p>}
+            </article>
+
+            {stats && (
+                <div className="kpi-grid">
+                    <article className="card kpi">
+                        <span>Total objets</span>
+                        <strong>{stats.totalObjets}</strong>
+                    </article>
+                    <article className="card kpi">
+                        <span>Actifs</span>
+                        <strong>{stats.actifs}</strong>
+                    </article>
+                    <article className="card kpi">
+                        <span>Inactifs</span>
+                        <strong>{stats.inactifs}</strong>
+                    </article>
+                    <article className="card kpi">
+                        <span>Actions historisées</span>
+                        <strong>{stats.actionsHistorique}</strong>
+                    </article>
+                </div>
+            )}
+
+            <article className="card">
+                <div className="row-between">
+                    <h3>{editingId ? `Modifier objet #${editingId}` : 'Créer un objet'}</h3>
+                    {editingId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditingId(null)
+                                setForm(initialGestionForm())
+                            }}
+                        >
+                            Annuler édition
+                        </button>
+                    )}
+                </div>
+                <form className="form-grid" onSubmit={submitGestionForm}>
+                    <div className="filters">
+                        <label>
+                            Type
+                            <select
+                                value={form.type}
+                                disabled={Boolean(editingId)}
+                                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+                            >
+                                {GESTION_TYPE_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                        {opt}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label>
+                            Nom
+                            <input
+                                required
+                                value={form.nom}
+                                onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
+                            />
+                        </label>
+
+                        <label>
+                            Marque
+                            <input
+                                value={form.marque}
+                                onChange={(e) => setForm((f) => ({ ...f, marque: e.target.value }))}
+                            />
+                        </label>
+
+                        <label>
+                            Pièce
+                            <select
+                                required
+                                value={form.pieceId}
+                                onChange={(e) => setForm((f) => ({ ...f, pieceId: e.target.value }))}
+                            >
+                                <option value="">Choisir une pièce</option>
+                                {pieces.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.nom}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label>
+                            État
+                            <select
+                                value={form.etat}
+                                onChange={(e) => setForm((f) => ({ ...f, etat: e.target.value }))}
+                            >
+                                {ETAT_OPTIONS.filter(Boolean).map((opt) => (
+                                    <option key={opt} value={opt}>
+                                        {opt}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label>
+                            Connectivité
+                            <select
+                                value={form.connectivite}
+                                onChange={(e) => setForm((f) => ({ ...f, connectivite: e.target.value }))}
+                            >
+                                <option value="WIFI">WIFI</option>
+                                <option value="BLUETOOTH">BLUETOOTH</option>
+                            </select>
+                        </label>
+
+                        <label>
+                            Batterie (%)
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={form.batterie}
+                                onChange={(e) => setForm((f) => ({ ...f, batterie: e.target.value }))}
+                            />
+                        </label>
+
+                        {(form.type === 'Porte' || form.type === 'Volet') && (
+                            <label>
+                                Position
+                                <input
+                                    type="number"
+                                    value={form.position}
+                                    onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+                                />
+                            </label>
+                        )}
+
+                        {(form.type === 'Thermostat' || form.type === 'Camera') && (
+                            <label>
+                                Zone
+                                <input
+                                    value={form.zone}
+                                    onChange={(e) => setForm((f) => ({ ...f, zone: e.target.value }))}
+                                />
+                            </label>
+                        )}
+
+                        {(form.type === 'Television' || form.type === 'LaveLinge') && (
+                            <>
+                                <label>
+                                    Cycle
+                                    <input
+                                        value={form.cycle}
+                                        onChange={(e) => setForm((f) => ({ ...f, cycle: e.target.value }))}
+                                    />
+                                </label>
+                                <label>
+                                    Conso énergie
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={form.consoEnergie}
+                                        onChange={(e) =>
+                                            setForm((f) => ({ ...f, consoEnergie: e.target.value }))
+                                        }
+                                    />
+                                </label>
+                            </>
+                        )}
+
+                        {(form.type === 'Nourriture' || form.type === 'Eau') && (
+                            <>
+                                <label>
+                                    Niveau
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={form.niveau}
+                                        onChange={(e) => setForm((f) => ({ ...f, niveau: e.target.value }))}
+                                    />
+                                </label>
+                                <label>
+                                    Animal
+                                    <input
+                                        value={form.animal}
+                                        onChange={(e) => setForm((f) => ({ ...f, animal: e.target.value }))}
+                                    />
+                                </label>
+                            </>
+                        )}
+                    </div>
+
+                    <button type="submit">{editingId ? 'Sauvegarder modifications' : 'Créer objet'}</button>
+                </form>
+            </article>
+
+            <article className="card">
+                <h3>Objets existants ({items.length})</h3>
+                {loading && <p>Chargement...</p>}
+                <div className="results-grid">
+                    {items.map((item) => (
+                        <article key={item.id} className="result-card">
+                            <header>
+                                <strong>{item.nom}</strong>
+                                <span className="badge">{item.type}</span>
+                            </header>
+                            <p>
+                                {item.marque || 'Marque inconnue'} · {item.pieceNom}
+                            </p>
+                            <p>
+                                Service: <strong>{item.service}</strong> · État: <strong>{item.etat}</strong>
+                            </p>
+                            <div className="inline-actions">
+                                <button type="button" onClick={() => startEdit(item.id)}>
+                                    Modifier
+                                </button>
+                                <button type="button" onClick={() => toggleEtat(item)}>
+                                    {item.etat === 'ACTIF' ? 'Désactiver' : 'Activer'}
+                                </button>
+                                <button type="button" onClick={() => deleteItem(item.id)}>
+                                    Supprimer
+                                </button>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            </article>
+
+            {stats?.parPiece?.length > 0 && (
+                <article className="card">
+                    <h3>Répartition par pièce</h3>
+                    <div className="chips">
+                        {stats.parPiece.map((p) => (
+                            <span key={p.piece} className="chip">
+                                {p.piece}: {p.objets}
+                            </span>
+                        ))}
+                    </div>
+                </article>
+            )}
+
+            <article className="card">
+                <h3>Historique des actions</h3>
+                <div className="history-list">
+                    {history.map((h) => (
+                        <div key={h.id} className="history-item">
+                            <strong>{h.action}</strong> · {h.objetNom || 'objet'} ({h.typeObjet || 'n/a'})
+                            <small>
+                                {new Date(h.timestamp).toLocaleString()} · {h.utilisateurEmail || 'n/a'}
+                            </small>
+                            {h.details && <small>{h.details}</small>}
+                        </div>
+                    ))}
+                    {history.length === 0 && <p>Aucune action historisée.</p>}
+                </div>
+            </article>
+        </section>
+    )
+}
+
 function ResultsCard({ loading, error, items }) {
     return (
         <article className="card">
@@ -693,6 +1097,76 @@ function ResultsCard({ loading, error, items }) {
             )}
         </article>
     )
+}
+
+function initialGestionForm() {
+    return {
+        type: 'Porte',
+        nom: '',
+        marque: '',
+        pieceId: '',
+        etat: 'ACTIF',
+        connectivite: 'WIFI',
+        batterie: '',
+        position: '',
+        zone: '',
+        cycle: '',
+        consoEnergie: '',
+        niveau: '',
+        animal: ''
+    }
+}
+
+function formFromDetail(detail) {
+    return {
+        type: detail.type ?? 'Porte',
+        nom: detail.nom ?? '',
+        marque: detail.marque ?? '',
+        pieceId: detail.pieceId != null ? String(detail.pieceId) : '',
+        etat: detail.etat ?? 'ACTIF',
+        connectivite: detail.connectivite ?? 'WIFI',
+        batterie: detail.batterie ?? '',
+        position: detail.position ?? '',
+        zone: detail.zone ?? '',
+        cycle: detail.cycle ?? '',
+        consoEnergie: detail.consoEnergie ?? '',
+        niveau: detail.niveau ?? '',
+        animal: detail.animal ?? ''
+    }
+}
+
+function gestionPayloadFromForm(form) {
+    return {
+        type: form.type,
+        nom: form.nom,
+        marque: emptyToNull(form.marque),
+        pieceId: toNullableInteger(form.pieceId),
+        etat: form.etat,
+        connectivite: form.connectivite,
+        batterie: toNullableFloat(form.batterie),
+        position: toNullableInteger(form.position),
+        zone: emptyToNull(form.zone),
+        cycle: emptyToNull(form.cycle),
+        consoEnergie: toNullableFloat(form.consoEnergie),
+        niveau: toNullableFloat(form.niveau),
+        animal: emptyToNull(form.animal)
+    }
+}
+
+function emptyToNull(value) {
+    if (value == null) return null
+    const trimmed = String(value).trim()
+    return trimmed ? trimmed : null
+}
+
+function toNullableInteger(value) {
+    const v = emptyToNull(value)
+    return v == null ? null : Number.parseInt(v, 10)
+}
+
+function toNullableFloat(value) {
+    const v = emptyToNull(value)
+    return v == null ? null : Number.parseFloat(v)
 }
 
 async function fetchJson(url, options = {}) {

@@ -90,6 +90,7 @@ Ouvrez http://localhost:5173 :
 - `/` affiche l'accueil public + état backend + KPIs.
 - `/recherche` affiche la recherche d'objets (publique) avec filtres combinables.
 - `/visualisation` expose le module privé (register/login, profil, services, recherche filtrée, points/niveau).
+- `/gestion` expose le CRUD objets (création, modification, association pièce, activation/désactivation, suppression), stats et historique.
 
 ## Tests manuels rapides
 
@@ -98,7 +99,9 @@ Ouvrez http://localhost:5173 :
 - `curl "http://localhost:8080/api/info/objets?type=Capteur&pieceId=1"` doit filtrer les objets.
 - `POST /api/auth/register` puis `GET /api/visualisation/profile` (avec cookie session) doit répondre 200.
 - `GET /api/visualisation/objets?service=Surveillance&etat=ACTIF&pieceId=1` doit retourner un sous-ensemble.
-- Ouvrir http://localhost:5173 et vérifier `/visualisation`.
+- `POST /api/gestion/objets` puis `PUT/PATCH/DELETE /api/gestion/objets/{id}` doivent fonctionner en session authentifiée.
+- `GET /api/gestion/stats` et `GET /api/gestion/historique` doivent remonter stats + traces d'actions.
+- Ouvrir http://localhost:5173 et vérifier `/visualisation` puis `/gestion`.
 
 ## Activer MySQL plus tard
 
