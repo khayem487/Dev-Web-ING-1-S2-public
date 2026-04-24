@@ -36,3 +36,16 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Node / Frontend ###
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+### Env files ###
+.env
+.env.local
+**/.env
+**/.env.local
+!**/.env.example
+
