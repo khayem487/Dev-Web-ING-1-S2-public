@@ -3,7 +3,7 @@
 Application web trois modules (Information / Visualisation / Gestion) pour une maison connectée.
 Le module **Administration est volontairement exclu** (correction du prof).
 
-> Documents de référence dans le repo : [CONTEXTE_PROJET_DEV_WEB.md](CONTEXTE_PROJET_DEV_WEB.md), [DECISIONS.md](DECISIONS.md), [UML_Maison.html](UML_Maison.html), [NEXT_TASKS.md](NEXT_TASKS.md), [WORKLOG.md](WORKLOG.md).
+> Documents de référence dans le repo : [PLAN.md](PLAN.md) (plan d'exécution MVP + Gantt), [CONTEXTE_PROJET_DEV_WEB.md](CONTEXTE_PROJET_DEV_WEB.md), [DECISIONS.md](DECISIONS.md), [UML_Maison.html](UML_Maison.html), [NEXT_TASKS.md](NEXT_TASKS.md), [WORKLOG.md](WORKLOG.md).
 
 ## Stack
 
@@ -90,6 +90,8 @@ Ouvrez http://localhost:5173 — la page doit afficher "Backend OK" avec le JSON
 ## Tests manuels rapides
 
 - `curl http://localhost:8080/api/health` doit renvoyer `{"status":"UP",...}`.
+- `curl http://localhost:8080/api/info/pieces` doit renvoyer 6 pièces seedées.
+- `curl "http://localhost:8080/api/info/objets?type=Capteur&pieceId=1"` doit filtrer les objets.
 - Ouvrir http://localhost:5173 : la carte doit être verte (backend OK).
 
 ## Activer MySQL plus tard
