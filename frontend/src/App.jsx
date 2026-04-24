@@ -21,6 +21,7 @@ const TYPE_OPTIONS = [
 const SERVICE_OPTIONS = ['', 'Acces', 'Surveillance', 'Confort', 'Animal']
 const ETAT_OPTIONS = ['', 'ACTIF', 'INACTIF']
 const GESTION_TYPE_OPTIONS = ['Porte', 'Volet', 'Thermostat', 'Camera', 'Television', 'LaveLinge', 'Nourriture', 'Eau']
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
 export default function App() {
     const [health, setHealth] = useState({ state: 'loading' })
@@ -1169,8 +1170,15 @@ function toNullableFloat(value) {
     return v == null ? null : Number.parseFloat(v)
 }
 
+function toApiUrl(path) {
+    if (/^https?:\/\//i.test(path)) {
+        return path
+    }
+    return `${API_BASE}${path}`
+}
+
 async function fetchJson(url, options = {}) {
-    const response = await fetch(url, {
+    const response = await fetch(toApiUrl(url), {
         credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
