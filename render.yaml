@@ -2,6 +2,7 @@ services:
   - type: web
     name: dev-web-ing1-api
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     autoDeploy: true
     healthCheckPath: /api/health
@@ -9,6 +10,7 @@ services:
   - type: web
     name: dev-web-ing1-web
     runtime: static
+    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
