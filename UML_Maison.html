@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>UML Maison Intelligente</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
+<style>
+  body { background: white; margin: 20px; font-family: Arial, sans-serif; }
+  h2 { color: #26215C; text-align: center; }
+  .mermaid { display: flex; justify-content: center; }
+</style>
+</head>
+<body>
+<h2>Diagramme UML — Maison Intelligente</h2>
+<div class="mermaid">
+classDiagram
+  Utilisateur <|-- Enfant
+  Utilisateur <|-- ParentFamille
+  Utilisateur <|-- VoisinVisiteur
+
+  Maison --> Piece
+  Maison --> Utilisateur
+  Piece --> ObjetConnecte
+
+  Piece <|-- Salon
+  Piece <|-- Chambre
+  Piece <|-- Cuisine
+  Piece <|-- SalleDeBain
+  Piece <|-- Toilettes
+  Piece <|-- Garage
+
+  ObjetConnecte <|-- Ouvrant
+  Ouvrant <|-- Volet
+  Ouvrant <|-- Porte
+  Ouvrant <|-- Fenetre
+  Ouvrant <|-- PorteGarage
+
+  ObjetConnecte <|-- Capteur
+  Capteur <|-- Thermostat
+  Capteur <|-- Climatiseur
+  Capteur <|-- Camera
+  Capteur <|-- Alarme
+  Capteur <|-- DetecteurMouvement
+
+  ObjetConnecte <|-- Appareil
+  Appareil <|-- LaveLinge
+  Appareil <|-- SecheLinge
+  Appareil <|-- LaveVaisselle
+  Appareil <|-- MachineCafe
+  Appareil <|-- Television
+  Appareil <|-- Enceinte
+  Appareil <|-- Aspirateur
+  Appareil <|-- Arrosage
+  Appareil <|-- Reveil
+
+  ObjetConnecte <|-- BesoinAnimal
+  BesoinAnimal <|-- Eau
+  BesoinAnimal <|-- Nourriture
+
+  Utilisateur --> HistoriqueAction
+  ObjetConnecte --> HistoriqueAction
+  ObjetConnecte --> DonneeCapteur
+</div>
+<script>mermaid.initialize({startOnLoad:true, theme:'default'});</script>
+</body>
+</html>
