@@ -10,7 +10,6 @@ services:
   - type: web
     name: dev-web-ing1-web
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
