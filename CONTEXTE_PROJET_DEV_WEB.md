@@ -300,3 +300,4 @@ classDiagram
 
 ---
 
+*Document de référence projet — Dev Web ING1 2025-2026*

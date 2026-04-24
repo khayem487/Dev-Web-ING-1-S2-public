@@ -49,6 +49,6 @@ frontend/.vite/
 **/.env.local
 !**/.env.example
 
-
-### Private AI coordination docs (keep local, don't publish) ###
+### Local/private notes ###
 SYNC_CONTEXT.md
+.local/

@@ -14,7 +14,7 @@ Administration **hors scope** (correction prof).
 - Un commit par tâche DoD-verte. Pas de WIP sur `main`.
 - Mise à jour de [WORKLOG.md](WORKLOG.md) après chaque tâche verte.
 - Pas de sur-ingénierie : pas de JWT si session suffit, pas de Tailwind avant P4 si CSS de base suffit, pas d'abstraction prématurée.
-- Le suivi du projet est centralisé via [NEXT_TASKS.md](NEXT_TASKS.md).
+- La coordination du projet se fait via [WORKLOG.md](WORKLOG.md) + [NEXT_TASKS.md](NEXT_TASKS.md).
 
 ## Jalons
 
