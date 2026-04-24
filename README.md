@@ -29,8 +29,9 @@ Le module **Administration est volontairement exclu** (correction du prof).
 │   ├── package.json
 │   ├── vite.config.js      # proxy /api -> http://localhost:8080
 │   └── src/
-│       ├── App.jsx         # ping /api/health
-│       └── index.jsx
+│       ├── App.jsx         # Router + pages / et /recherche
+│       ├── App.css         # styles MVP
+│       └── index.jsx       # BrowserRouter mount
 └── .env.example
 ```
 
@@ -85,7 +86,9 @@ cd frontend
 npm.cmd install
 npm.cmd run dev
 ```
-Ouvrez http://localhost:5173 — la page doit afficher "Backend OK" avec le JSON retourné par `/api/health`.
+Ouvrez http://localhost:5173 :
+- `/` affiche l'accueil public + état backend + KPIs.
+- `/recherche` affiche la recherche d'objets avec filtres combinables.
 
 ## Tests manuels rapides
 

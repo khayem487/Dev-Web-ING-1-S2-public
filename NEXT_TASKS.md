@@ -12,14 +12,14 @@
   - [ ] Install Tailwind CSS in frontend (deferred until baseline confirmed green)
   - [ ] Switch from H2 to MySQL and add initial schema/seed (after first entities exist)
 
-- [~] **P1 Module Information**
+- [x] **P1 Module Information**
   - [x] **P1.1** Entités `Maison` + `Piece` (abstraite + 6 concrètes, SINGLE_TABLE) + `PieceRepository` + seed + `GET /api/info/pieces` (renvoie 6 pièces, vérifié)
   - [x] **P1.2** Entités `ObjetConnecte` (abstraite + 4 branches + ≥ 2 feuilles/branche) + seed = 12 objets
   - [x] **P1.3** `GET /api/info/objets?type=X&pieceId=Y&q=Z` (filtres combinables, vérifié)
   - [x] **P1.4** DTOs ObjetConnecte (évite sérialisation circulaire)
-  - [ ] **P1.5** React Router + layout (Header/Main/Footer)
-  - [ ] **P1.6** Page `/` publique
-  - [ ] **P1.7** Page `/recherche` avec 3 filtres + debounce
+  - [x] **P1.5** React Router + layout (Header/Main/Footer)
+  - [x] **P1.6** Page `/` publique
+  - [x] **P1.7** Page `/recherche` avec 3 filtres + debounce
 
 - [ ] **P2 Module Visualisation**
   - [ ] Register/Login flow
