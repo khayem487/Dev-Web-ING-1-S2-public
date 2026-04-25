@@ -22,11 +22,35 @@ const SERVICE_OPTIONS = ['', 'Acces', 'Surveillance', 'Confort', 'Animal']
 const ETAT_OPTIONS = ['', 'ACTIF', 'INACTIF']
 const GESTION_TYPE_OPTIONS = ['Porte', 'Volet', 'Thermostat', 'Camera', 'Television', 'LaveLinge', 'Nourriture', 'Eau']
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const DEMO_ACCOUNTS = [
+    {
+        key: 'parent',
+        role: 'ParentFamille',
+        niveauMax: 'Avancé',
+        email: 'parent@demo.local',
+        motDePasse: 'demo1234'
+    },
+    {
+        key: 'enfant',
+        role: 'Enfant',
+        niveauMax: 'Intermédiaire',
+        email: 'enfant@demo.local',
+        motDePasse: 'demo1234'
+    },
+    {
+        key: 'voisin',
+        role: 'VoisinVisiteur',
+        niveauMax: 'Débutant',
+        email: 'voisin@demo.local',
+        motDePasse: 'demo1234'
+    }
+]
 
 export default function App() {
     const [health, setHealth] = useState({ state: 'loading' })
     const [sessionUser, setSessionUser] = useState(null)
     const [sessionReady, setSessionReady] = useState(false)
+    const [selectedObject, setSelectedObject] = useState(null)
 
     useEffect(() => {
         let cancelled = false
@@ -80,8 +104,17 @@ export default function App() {
 
             <main id="main-content" className="app-main" tabIndex="-1">
                 <Routes>
-                    <Route path="/" element={<HomePage health={health} sessionUser={sessionUser} />} />
-                    <Route path="/recherche" element={<SearchPage />} />
+                    <Route
+                        path="/"
+                        element={
+                            <HomePage
+                                health={health}
+                                sessionUser={sessionUser}
+                                onOpenDetail={setSelectedObject}
+                            />
+                        }
+                    />
+                    <Route path="/recherche" element={<SearchPage onOpenDetail={setSelectedObject} />} />
                     <Route
                         path="/visualisation"
                         element={
@@ -89,6 +122,7 @@ export default function App() {
                                 sessionUser={sessionUser}
                                 sessionReady={sessionReady}
                                 onSessionRefresh={refreshSession}
+                                onOpenDetail={setSelectedObject}
                             />
                         }
                     />
@@ -99,6 +133,7 @@ export default function App() {
                                 sessionUser={sessionUser}
                                 sessionReady={sessionReady}
                                 onSessionRefresh={refreshSession}
+                                onOpenDetail={setSelectedObject}
                             />
                         }
                     />
@@ -106,14 +141,17 @@ export default function App() {
                 </Routes>
             </main>
 
+            <ObjectDetailModal item={selectedObject} onClose={() => setSelectedObject(null)} />
+
             <footer className="app-footer">CY Tech · ING1 · Maison connectée</footer>
         </div>
     )
 }
 
-function HomePage({ health, sessionUser }) {
+function HomePage({ health, sessionUser, onOpenDetail }) {
     const [piecesCount, setPiecesCount] = useState(null)
     const [objetsCount, setObjetsCount] = useState(null)
+    const [recentItems, setRecentItems] = useState([])
 
     useEffect(() => {
         let cancelled = false
@@ -124,13 +162,17 @@ function HomePage({ health, sessionUser }) {
         ])
             .then(([pieces, objets]) => {
                 if (cancelled) return
-                setPiecesCount(Array.isArray(pieces) ? pieces.length : 0)
-                setObjetsCount(Array.isArray(objets) ? objets.length : 0)
+                const safePieces = Array.isArray(pieces) ? pieces : []
+                const safeObjets = Array.isArray(objets) ? objets : []
+                setPiecesCount(safePieces.length)
+                setObjetsCount(safeObjets.length)
+                setRecentItems(safeObjets.slice(0, 4))
             })
             .catch(() => {
                 if (cancelled) return
                 setPiecesCount(0)
                 setObjetsCount(0)
+                setRecentItems([])
             })
 
         return () => {
@@ -150,12 +192,12 @@ function HomePage({ health, sessionUser }) {
                     <li>✅ Module Information terminé (P1)</li>
                     <li>✅ Module Visualisation terminé (auth, profil, points/niveaux)</li>
                     <li>✅ Module Gestion terminé (CRUD + stats + historique)</li>
-                    <li>➡️ Next: P4 qualité/livraison (responsive, accessibilité, démo)</li>
+                    <li>✅ Profils de démo disponibles (Parent/Enfant/Voisin)</li>
                 </ul>
                 {sessionUser && (
                     <p className="ok" role="status">
-                        Connecté: {sessionUser.prenom} {sessionUser.nom} · Niveau {sessionUser.niveau} ·{' '}
-                        {sessionUser.points} pts
+                        Connecté: {sessionUser.prenom} {sessionUser.nom} · Niveau {formatNiveauLabel(sessionUser.niveau)} ·{' '}
+                        {Math.floor(sessionUser.points ?? 0)} pts
                     </p>
                 )}
             </article>
@@ -183,12 +225,42 @@ function HomePage({ health, sessionUser }) {
                     <span>Objets connectés</span>
                     <strong>{objetsCount ?? '...'}</strong>
                 </article>
+                <article className="card kpi">
+                    <span>Modules</span>
+                    <strong>3</strong>
+                </article>
+                <article className="card kpi">
+                    <span>État</span>
+                    <strong>{health.state === 'ok' ? 'Online' : '...'}</strong>
+                </article>
             </div>
+
+            <article className="card">
+                <h3>Objets récents (inspiration v4)</h3>
+                <div className="results-grid">
+                    {recentItems.map((item) => (
+                        <article
+                            key={item.id}
+                            className="result-card clickable"
+                            onClick={() => onOpenDetail?.(item)}
+                        >
+                            <header>
+                                <strong>{item.nom}</strong>
+                                <span className="badge">{item.type}</span>
+                            </header>
+                            <p>{item.marque || 'Marque inconnue'} · {item.pieceNom}</p>
+                            <p>
+                                Service: <strong>{item.service}</strong> · État: <strong>{item.etat}</strong>
+                            </p>
+                        </article>
+                    ))}
+                </div>
+            </article>
         </section>
     )
 }
 
-function SearchPage() {
+function SearchPage({ onOpenDetail }) {
     const [pieces, setPieces] = useState([])
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
@@ -285,12 +357,17 @@ function SearchPage() {
                 <small>{subtitle}</small>
             </article>
 
-            <ResultsCard loading={loading} error={error} items={items} />
+            <ResultsCard
+                loading={loading}
+                error={error}
+                items={items}
+                onOpenDetail={onOpenDetail}
+            />
         </section>
     )
 }
 
-function VisualisationPage({ sessionUser, sessionReady, onSessionRefresh }) {
+function VisualisationPage({ sessionUser, sessionReady, onSessionRefresh, onOpenDetail }) {
     if (!sessionReady) {
         return (
             <section className="card">
@@ -304,11 +381,23 @@ function VisualisationPage({ sessionUser, sessionReady, onSessionRefresh }) {
         return <AuthPanel onSessionRefresh={onSessionRefresh} />
     }
 
-    return <VisualisationDashboard sessionUser={sessionUser} onSessionRefresh={onSessionRefresh} />
+    return (
+        <VisualisationDashboard
+            sessionUser={sessionUser}
+            onSessionRefresh={onSessionRefresh}
+            onOpenDetail={onOpenDetail}
+        />
+    )
 }
 
 function AuthPanel({ onSessionRefresh }) {
-    const [registerForm, setRegisterForm] = useState({ prenom: '', nom: '', email: '', motDePasse: '' })
+    const [registerForm, setRegisterForm] = useState({
+        prenom: '',
+        nom: '',
+        email: '',
+        motDePasse: '',
+        typeMembre: 'PARENT_FAMILLE'
+    })
     const [loginForm, setLoginForm] = useState({ email: '', motDePasse: '' })
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
@@ -345,6 +434,22 @@ function AuthPanel({ onSessionRefresh }) {
         }
     }
 
+    const loginDemo = async (demo) => {
+        setError('')
+        setMessage('')
+        setLoginForm({ email: demo.email, motDePasse: demo.motDePasse })
+        try {
+            await fetchJson('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email: demo.email, motDePasse: demo.motDePasse })
+            })
+            setMessage(`Connecté en démo : ${demo.role} ✅`)
+            await onSessionRefresh()
+        } catch (err) {
+            setError(`Connexion démo impossible (${demo.email}) : ${err.message}`)
+        }
+    }
+
     return (
         <section className="stack">
             <article className="card">
@@ -357,7 +462,25 @@ function AuthPanel({ onSessionRefresh }) {
                 {error && <p className="error" role="alert">{error}</p>}
             </article>
 
-            <div className="auth-grid">
+            <div className="auth-grid auth-grid-3">
+                <article className="card demo-card">
+                    <h3>Profils de démo (comme v4)</h3>
+                    <p className="field-help">Mot de passe pour tous: <strong>demo1234</strong></p>
+                    <div className="demo-list">
+                        {DEMO_ACCOUNTS.map((demo) => (
+                            <button
+                                key={demo.key}
+                                type="button"
+                                className="demo-btn"
+                                onClick={() => loginDemo(demo)}
+                            >
+                                <span>{demo.role}</span>
+                                <small>{demo.email} · plafond {demo.niveauMax}</small>
+                            </button>
+                        ))}
+                    </div>
+                </article>
+
                 <article className="card">
                     <h3>Créer un compte</h3>
                     <form className="form-grid" onSubmit={submitRegister}>
@@ -396,6 +519,19 @@ function AuthPanel({ onSessionRefresh }) {
                                 onChange={(e) => setRegisterForm((f) => ({ ...f, motDePasse: e.target.value }))}
                             />
                         </label>
+                        <label>
+                            Type de membre
+                            <select
+                                value={registerForm.typeMembre}
+                                onChange={(e) =>
+                                    setRegisterForm((f) => ({ ...f, typeMembre: e.target.value }))
+                                }
+                            >
+                                <option value="PARENT_FAMILLE">ParentFamille (max Avancé)</option>
+                                <option value="ENFANT">Enfant (max Intermédiaire)</option>
+                                <option value="VOISIN_VISITEUR">VoisinVisiteur (max Débutant)</option>
+                            </select>
+                        </label>
                         <button type="submit">Créer et se connecter</button>
                     </form>
                 </article>
@@ -429,7 +565,7 @@ function AuthPanel({ onSessionRefresh }) {
     )
 }
 
-function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
+function VisualisationDashboard({ sessionUser, onSessionRefresh, onOpenDetail }) {
     const [profile, setProfile] = useState(sessionUser)
     const [profileForm, setProfileForm] = useState({
         pseudo: '',
@@ -528,15 +664,30 @@ function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
         await onSessionRefresh()
     }
 
+    const points = Number(profile?.points ?? sessionUser?.points ?? 0)
+    const levelMeta = niveauMeta(profile?.niveau ?? sessionUser?.niveau)
+    const nextMeta = nextNiveauMeta(profile?.niveau ?? sessionUser?.niveau)
+    const progressPct = nextMeta
+        ? Math.max(
+              0,
+              Math.min(100, Math.round(((points - levelMeta.min) / (nextMeta.min - levelMeta.min)) * 100))
+          )
+        : 100
+
     return (
         <section className="stack">
-            <article className="card">
+            <article className="card profile-hero">
                 <div className="row-between">
                     <div>
                         <h2>Visualisation privée</h2>
                         <p>
                             Bienvenue {profile?.prenom} {profile?.nom}.
                         </p>
+                        <div className="chips" style={{ marginTop: 8 }}>
+                            <span className="chip">{formatTypeMembreLabel(profile?.typeMembre)}</span>
+                            <span className="chip">Plafond: {formatNiveauLabel(profile?.niveauMax)}</span>
+                            <span className="chip">Connexions: {profile?.nbConnexions ?? '-'}</span>
+                        </div>
                     </div>
                     <button type="button" onClick={logout}>Se déconnecter</button>
                 </div>
@@ -544,12 +695,26 @@ function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
                 <div className="kpi-grid">
                     <article className="card kpi">
                         <span>Niveau</span>
-                        <strong>{profile?.niveau ?? sessionUser.niveau}</strong>
+                        <strong>{formatNiveauLabel(profile?.niveau ?? sessionUser.niveau)}</strong>
                     </article>
                     <article className="card kpi">
                         <span>Points</span>
-                        <strong>{profile?.points ?? sessionUser.points}</strong>
+                        <strong>{Math.floor(points)}</strong>
                     </article>
+                </div>
+
+                <div className="progress-wrap" aria-label="Progression niveau">
+                    <div className="progress-label">
+                        <span>Progression</span>
+                        <span>
+                            {nextMeta
+                                ? `${Math.floor(points)} / ${nextMeta.min} pts → ${nextMeta.label}`
+                                : 'Niveau max atteint'}
+                        </span>
+                    </div>
+                    <div className="progress-track">
+                        <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+                    </div>
                 </div>
             </article>
 
@@ -673,12 +838,17 @@ function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
                 </div>
             </article>
 
-            <ResultsCard loading={loading} error={error} items={items} />
+            <ResultsCard
+                loading={loading}
+                error={error}
+                items={items}
+                onOpenDetail={onOpenDetail}
+            />
         </section>
     )
 }
 
-function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
+function GestionPage({ sessionUser, sessionReady, onSessionRefresh, onOpenDetail }) {
     const [pieces, setPieces] = useState([])
     const [items, setItems] = useState([])
     const [stats, setStats] = useState(null)
@@ -686,12 +856,14 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [message, setMessage] = useState('')
+    const [accessDenied, setAccessDenied] = useState(false)
     const [editingId, setEditingId] = useState(null)
     const [form, setForm] = useState(initialGestionForm())
 
     const loadGestionData = useCallback(async () => {
         setLoading(true)
         setError('')
+        setAccessDenied(false)
         try {
             const [piecesData, objetsData, statsData, historyData] = await Promise.all([
                 fetchJson('/api/info/pieces'),
@@ -705,7 +877,12 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
             setHistory(Array.isArray(historyData) ? historyData : [])
             await onSessionRefresh()
         } catch (err) {
-            setError(err.message)
+            if (err?.status === 403) {
+                setAccessDenied(true)
+                setError('')
+            } else {
+                setError(err.message)
+            }
         } finally {
             setLoading(false)
         }
@@ -731,6 +908,27 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
             <section className="card">
                 <h2>Gestion (auth requise)</h2>
                 <p>Connecte-toi sur l'onglet Visualisation pour accéder au CRUD objets.</p>
+            </section>
+        )
+    }
+
+    if (accessDenied) {
+        return (
+            <section className="card">
+                <h2>Accès Gestion refusé</h2>
+                <p>
+                    Le module Gestion exige un compte <strong>ParentFamille</strong> avec plafond
+                    <strong> Avancé</strong>.
+                </p>
+                <ul>
+                    <li>VoisinVisiteur → Débutant</li>
+                    <li>Enfant → Intermédiaire</li>
+                    <li>ParentFamille → Avancé</li>
+                </ul>
+                <p className="field-help">
+                    Utilise un compte démo ParentFamille (<code>parent@demo.local</code> / <code>demo1234</code>)
+                    depuis l'onglet Visualisation.
+                </p>
             </section>
         )
     }
@@ -1010,7 +1208,11 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
                 {loading && <p>Chargement...</p>}
                 <div className="results-grid">
                     {items.map((item) => (
-                        <article key={item.id} className="result-card">
+                        <article
+                            key={item.id}
+                            className="result-card clickable"
+                            onClick={() => onOpenDetail?.(item)}
+                        >
                             <header>
                                 <strong>{item.nom}</strong>
                                 <span className="badge">{item.type}</span>
@@ -1021,7 +1223,7 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
                             <p>
                                 Service: <strong>{item.service}</strong> · État: <strong>{item.etat}</strong>
                             </p>
-                            <div className="inline-actions">
+                            <div className="inline-actions" onClick={(e) => e.stopPropagation()}>
                                 <button type="button" onClick={() => startEdit(item.id)}>
                                     Modifier
                                 </button>
@@ -1069,7 +1271,7 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
     )
 }
 
-function ResultsCard({ loading, error, items }) {
+function ResultsCard({ loading, error, items, onOpenDetail }) {
     return (
         <article className="card">
             <h3>Résultats</h3>
@@ -1081,7 +1283,11 @@ function ResultsCard({ loading, error, items }) {
                     <p>{items.length} objet(s) trouvé(s)</p>
                     <div className="results-grid">
                         {items.map((item) => (
-                            <article key={item.id} className="result-card">
+                            <article
+                                key={item.id}
+                                className="result-card clickable"
+                                onClick={() => onOpenDetail?.(item)}
+                            >
                                 <header>
                                     <strong>{item.nom}</strong>
                                     <span className="badge">{item.type}</span>
@@ -1103,6 +1309,84 @@ function ResultsCard({ loading, error, items }) {
             )}
         </article>
     )
+}
+
+function ObjectDetailModal({ item, onClose }) {
+    if (!item) return null
+
+    return (
+        <div className="modal-overlay" role="presentation" onClick={onClose}>
+            <aside
+                className="modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Détail ${item.nom}`}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="row-between">
+                    <h3>Détail objet</h3>
+                    <button type="button" onClick={onClose}>Fermer</button>
+                </div>
+                <h2>{item.nom}</h2>
+                <div className="chips">
+                    <span className="chip">{item.type}</span>
+                    <span className="chip">{item.service}</span>
+                    <span className="chip">{item.etat}</span>
+                </div>
+                <div className="stack" style={{ marginTop: 12 }}>
+                    <p><strong>Code:</strong> {item.code ?? 'n/a'}</p>
+                    <p><strong>Branche:</strong> {item.branche ?? 'n/a'}</p>
+                    <p><strong>Pièce:</strong> {item.pieceNom ?? 'n/a'}</p>
+                    <p><strong>Marque:</strong> {item.marque ?? 'n/a'}</p>
+                    <p><strong>Connectivité:</strong> {item.connectivite ?? 'n/a'}</p>
+                    <p><strong>Batterie:</strong> {item.batterie != null ? `${item.batterie}%` : 'n/a'}</p>
+                    <p><strong>Valeur:</strong> {item.valeur ?? 'n/a'}</p>
+                </div>
+            </aside>
+        </div>
+    )
+}
+
+function formatNiveauLabel(value) {
+    if (!value) return 'Débutant'
+    return String(value)
+        .toUpperCase()
+        .replaceAll('_', ' ')
+        .replace('DEBUTANT', 'Débutant')
+        .replace('INTERMEDIAIRE', 'Intermédiaire')
+        .replace('AVANCE', 'Avancé')
+}
+
+function formatTypeMembreLabel(value) {
+    if (!value) return 'ParentFamille'
+    return String(value)
+        .toUpperCase()
+        .replaceAll('_', ' ')
+        .replace('PARENT FAMILLE', 'ParentFamille')
+        .replace('VOISIN VISITEUR', 'VoisinVisiteur')
+        .replace('ENFANT', 'Enfant')
+}
+
+function niveauMeta(value) {
+    const order = [
+        { key: 'DEBUTANT', label: 'Débutant', min: 0 },
+        { key: 'INTERMEDIAIRE', label: 'Intermédiaire', min: 3 },
+        { key: 'AVANCE', label: 'Avancé', min: 10 }
+    ]
+    const key = String(value ?? 'DEBUTANT').toUpperCase()
+    return order.find((x) => x.key === key) ?? order[0]
+}
+
+function nextNiveauMeta(value) {
+    const order = [
+        { key: 'DEBUTANT', label: 'Débutant', min: 0 },
+        { key: 'INTERMEDIAIRE', label: 'Intermédiaire', min: 3 },
+        { key: 'AVANCE', label: 'Avancé', min: 10 }
+    ]
+    const key = String(value ?? 'DEBUTANT').toUpperCase()
+    const idx = order.findIndex((x) => x.key === key)
+    if (idx < 0 || idx >= order.length - 1) return null
+    return order[idx + 1]
 }
 
 function initialGestionForm() {
@@ -1210,7 +1494,9 @@ async function fetchJson(url, options = {}) {
         const message =
             (payload && typeof payload === 'object' && (payload.message || payload.error)) ||
             `HTTP ${response.status}`
-        throw new Error(message)
+        const error = new Error(message)
+        error.status = response.status
+        throw error
     }
 
     return payload
