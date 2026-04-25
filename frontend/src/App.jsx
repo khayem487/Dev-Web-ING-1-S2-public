@@ -51,33 +51,6 @@ const ICONS = {
   Fenetre:'window', DetecteurMouvement:'motion', Aspirateur:'vacuum'
 };
 
-const OBJETS_INIT = [
-  { id:1, code:'TH-001', nom:'Thermostat Salon', type:'Thermostat', branche:'Capteur', marque:'Netatmo', pieceNom:'Salon', service:'Confort', etat:'ACTIF', connectivite:'WIFI', batterie:87, valeur:'21.5°C', cible:22 },
-  { id:2, code:'CM-014', nom:'Caméra Entrée', type:'Camera', branche:'Capteur', marque:'Arlo', pieceNom:'Salon', service:'Surveillance', etat:'ACTIF', connectivite:'WIFI', batterie:62, valeur:'4K · enregistre' },
-  { id:3, code:'PG-002', nom:'Porte Garage', type:'PorteGarage', branche:'Ouvrant', marque:'Somfy', pieceNom:'Garage', service:'Acces', etat:'INACTIF', connectivite:'BLUETOOTH', batterie:15, valeur:'Fermée' },
-  { id:4, code:'VL-007', nom:'Volet Chambre', type:'Volet', branche:'Ouvrant', marque:'Velux', pieceNom:'Chambre', service:'Confort', etat:'ACTIF', connectivite:'WIFI', batterie:100, valeur:'60% ouvert' },
-  { id:5, code:'LL-003', nom:'Lave-Linge', type:'LaveLinge', branche:'Appareil', marque:'Bosch', pieceNom:'Salle de bain', service:'Confort', etat:'ACTIF', connectivite:'WIFI', batterie:null, valeur:'Coton 40°' },
-  { id:6, code:'TV-005', nom:'TV Samsung', type:'Television', branche:'Appareil', marque:'Samsung', pieceNom:'Salon', service:'Confort', etat:'INACTIF', connectivite:'WIFI', batterie:null, valeur:'En veille' },
-  { id:7, code:'EU-008', nom:'Distributeur eau', type:'Eau', branche:'BesoinAnimal', marque:'PetSafe', pieceNom:'Cuisine', service:'Animal', etat:'ACTIF', connectivite:'BLUETOOTH', batterie:45, valeur:'70% plein' },
-  { id:8, code:'NR-009', nom:'Distrib. croquettes', type:'Nourriture', branche:'BesoinAnimal', marque:'SureFeed', pieceNom:'Cuisine', service:'Animal', etat:'ACTIF', connectivite:'WIFI', batterie:72, valeur:'40% restant' },
-  { id:9, code:'AL-011', nom:'Alarme Entrée', type:'Alarme', branche:'Capteur', marque:'Verisure', pieceNom:'Salon', service:'Surveillance', etat:'ACTIF', connectivite:'WIFI', batterie:90, valeur:'Armée' },
-  { id:10, code:'MC-012', nom:'Machine à café', type:'MachineCafe', branche:'Appareil', marque:'Nespresso', pieceNom:'Cuisine', service:'Confort', etat:'ACTIF', connectivite:'BLUETOOTH', batterie:null, valeur:'Prête' },
-  { id:11, code:'PT-013', nom:'Porte d\'entrée', type:'Porte', branche:'Ouvrant', marque:'Yale', pieceNom:'Salon', service:'Acces', etat:'ACTIF', connectivite:'WIFI', batterie:78, valeur:'Verrouillée' },
-  { id:12, code:'CL-015', nom:'Climatiseur', type:'Climatiseur', branche:'Capteur', marque:'Daikin', pieceNom:'Chambre', service:'Confort', etat:'INACTIF', connectivite:'WIFI', batterie:null, valeur:'Off' },
-];
-
-const HISTORY_BASE = [
-  { id:1, action:'CRÉATION', objetNom:'Thermostat Salon', code:'TH-001', timestamp:Date.now()-86400000*3, utilisateur:'alice', details:null },
-  { id:2, action:'ACTIVATION', objetNom:'Caméra Entrée', code:'CM-014', timestamp:Date.now()-86400000*2, utilisateur:'bob', details:'etat → ACTIF' },
-  { id:3, action:'MODIFICATION', objetNom:'Porte Garage', code:'PG-002', timestamp:Date.now()-86400000, utilisateur:'alice', details:'batterie 35 → 15' },
-  { id:4, action:'DÉSACTIVATION', objetNom:'TV Samsung', code:'TV-005', timestamp:Date.now()-3600000*5, utilisateur:'alice', details:null },
-];
-
-const USERS = {
-  alice: { prenom:'Alice', nom:'Martin', pseudo:'ali_smart', email:'alice@cytech.fr', typeMembre:'ParentFamille', niveau:'Avancé', niveauMax:'Avancé', points:240, age:42, photo:'AM' },
-  jules: { prenom:'Jules', nom:'Martin', pseudo:'juju12', email:'jules@cytech.fr', typeMembre:'Enfant', niveau:'Intermédiaire', niveauMax:'Intermédiaire', points:118, age:12, photo:'JM' },
-  paul:  { prenom:'Paul', nom:'Voisin', pseudo:'paul_v', email:'paul@cytech.fr', typeMembre:'VoisinVisiteur', niveau:'Débutant', niveauMax:'Débutant', points:34, age:35, photo:'PV' },
-};
 
 const NIVEAUX = [
   { code:'Débutant', seuil:0 }, { code:'Intermédiaire', seuil:50 },
@@ -90,6 +63,130 @@ const PAGES = [
   { id:'visualisation', label:'Mes objets', icon:'grid' },
   { id:'gestion', label:'Gestion', icon:'settings' },
 ];
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const GESTION_TYPE_OPTIONS = ['Porte', 'Volet', 'Thermostat', 'Camera', 'Television', 'LaveLinge', 'Nourriture', 'Eau']
+const DEMO_CREDENTIALS = [
+  { email: 'parent@demo.local', motDePasse: 'demo1234' },
+  { email: 'enfant@demo.local', motDePasse: 'demo1234' },
+  { email: 'voisin@demo.local', motDePasse: 'demo1234' }
+]
+
+function toApiUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path
+  return `${API_BASE}${path}`
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(toApiUrl(url), {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    },
+    ...options
+  })
+
+  if (response.status === 204) {
+    return null
+  }
+
+  const text = await response.text()
+  let payload = null
+  if (text) {
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = text
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      (payload && typeof payload === 'object' && (payload.message || payload.error)) ||
+      `HTTP ${response.status}`
+    const error = new Error(message)
+    error.status = response.status
+    throw error
+  }
+
+  return payload
+}
+
+function normalizeEnumLabel(value) {
+  if (!value) return ''
+  const v = String(value)
+  return v
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (x) => x.toUpperCase())
+    .replace('Intermediaire', 'Intermédiaire')
+    .replace('Debutant', 'Débutant')
+    .replace('Avance', 'Avancé')
+}
+
+function toUiUser(user) {
+  if (!user) return null
+  const prenom = user.prenom || ''
+  const nom = user.nom || ''
+  const initials = `${prenom[0] || ''}${nom[0] || ''}`.toUpperCase() || 'U'
+  return {
+    ...user,
+    pseudo: user.pseudo || (user.email ? user.email.split('@')[0] : 'user'),
+    photo: initials,
+    typeMembre: normalizeEnumLabel(user.typeMembre) || user.typeMembre,
+    niveau: normalizeEnumLabel(user.niveau) || user.niveau,
+    niveauMax: normalizeEnumLabel(user.niveauMax) || user.niveauMax,
+    points: Number(user.points || 0)
+  }
+}
+
+function inferServiceFromType(type = '') {
+  if (['Porte', 'Volet'].includes(type)) return 'Acces'
+  if (['Thermostat', 'Camera'].includes(type)) return 'Surveillance'
+  if (['Television', 'LaveLinge'].includes(type)) return 'Confort'
+  if (['Nourriture', 'Eau'].includes(type)) return 'Animal'
+  return 'Confort'
+}
+
+function inferBrancheFromType(type = '') {
+  if (['Porte', 'Volet'].includes(type)) return 'Ouvrant'
+  if (['Thermostat', 'Camera'].includes(type)) return 'Capteur'
+  if (['Television', 'LaveLinge'].includes(type)) return 'Appareil'
+  if (['Nourriture', 'Eau'].includes(type)) return 'BesoinAnimal'
+  return 'Capteur'
+}
+
+function toUiItem(item) {
+  const id = Number(item?.id || 0)
+  const type = item?.type || 'Objet'
+  const prefix = String(type).slice(0, 2).toUpperCase()
+  return {
+    ...item,
+    id,
+    type,
+    code: item?.code || `${prefix}-${String(id).padStart(3, '0')}`,
+    branche: item?.branche || inferBrancheFromType(type),
+    service: item?.service || inferServiceFromType(type),
+    pieceNom: item?.pieceNom || 'Maison',
+    marque: item?.marque || 'N/A',
+    connectivite: item?.connectivite || 'WIFI',
+    valeur: item?.valeur || `${item?.etat || 'INACTIF'}`,
+    batterie: item?.batterie == null ? null : Number(item.batterie)
+  }
+}
+
+function historyToUiItem(h, idx = 0) {
+  return {
+    id: h?.id || Date.now() + idx,
+    action: h?.action || 'ACTION',
+    objetNom: h?.objetNom || 'Objet',
+    code: h?.codeObjet || h?.typeObjet || 'OBJ',
+    utilisateur: h?.utilisateurEmail ? h.utilisateurEmail.split('@')[0] : 'system',
+    details: h?.details || null,
+    timestamp: h?.timestamp || Date.now()
+  }
+}
 
 /* ─── ICONOGRAPHY ─────────────────────────────── */
 function Icon({ name, size=18 }) {
@@ -327,9 +424,10 @@ function DetailDrawer({ obj, onClose }) {
 }
 
 /* ─── HOUSE MAP ───────────────────────────── */
-function HouseMap({ items, t }) {
+function HouseMap({ items, pieces, t }) {
+  const piecesList = pieces?.length ? pieces : PIECES
   const counts = {};
-  PIECES.forEach(p => { counts[p.nom] = items.filter(o=>o.pieceNom===p.nom && o.etat==='ACTIF').length; });
+  piecesList.forEach(p => { counts[p.nom] = items.filter(o=>o.pieceNom===p.nom && o.etat==='ACTIF').length; });
   return (
     <div style={{
       borderRadius:18, background:'var(--surface)', border:'1px solid var(--line)',
@@ -356,7 +454,7 @@ function HouseMap({ items, t }) {
           { nom:'Salle de bain', col:'2 / 3', row:'2 / 3' },
           { nom:'Garage', col:'3 / 4', row:'2 / 3' },
         ].map(p => {
-          const room = PIECES.find(r => r.nom === p.nom);
+          const room = piecesList.find(r => r.nom === p.nom) || { icon: '•', surface: 0 };
           const c = counts[p.nom] || 0;
           const intensity = c / 4;
           return (
@@ -387,7 +485,7 @@ function HouseMap({ items, t }) {
 }
 
 /* ─── HOME ─────────────────────────────────── */
-function HomePage({ user, items, t, openDetail }) {
+function HomePage({ user, items, pieces, t, openDetail, health }) {
   const actifs = items.filter(o => o.etat==='ACTIF').length;
   const lowBat = items.filter(o => o.batterie!=null && o.batterie<20);
   const consumption = items.filter(o => o.etat==='ACTIF' && o.branche === 'Appareil').length * 1.2;
@@ -417,7 +515,7 @@ function HomePage({ user, items, t, openDetail }) {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
         {[
           { label:'Objets total', val:items.length, sub:'enregistrés', color: 'var(--text)', icon:'grid' },
-          { label:'En service', val:actifs, sub:`${Math.round(actifs/items.length*100)}% actifs`, color: 'var(--green)', icon:'power' },
+          { label:'En service', val:actifs, sub:`${items.length ? Math.round(actifs/items.length*100) : 0}% actifs`, color: 'var(--green)', icon:'power' },
           { label:'Conso estimée', val:`${consumption.toFixed(1)}`, sub:'kWh / heure', color: t.accent, icon:'bolt', unit:'' },
           { label:'Alertes', val:lowBat.length, sub: lowBat.length>0 ? 'à recharger' : 'tout va bien', color: lowBat.length > 0 ? 'var(--red)' : 'var(--text-2)', icon:'bell' },
         ].map(k => (
@@ -433,7 +531,7 @@ function HomePage({ user, items, t, openDetail }) {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1.3fr 1fr', gap:16, marginBottom:32 }}>
-        <HouseMap items={items} t={t}/>
+        <HouseMap items={items} pieces={pieces} t={t}/>
         <div style={{ borderRadius:18, background:'var(--surface)', border:'1px solid var(--line)', padding:24, display:'flex', flexDirection:'column' }}>
           <div className="label" style={{ marginBottom:6 }}>Modules</div>
           <h3 className="display" style={{ fontSize:22, marginBottom:16 }}>Trois espaces</h3>
@@ -470,7 +568,8 @@ const ctaPri = { padding:'10px 18px', borderRadius:10, background:'var(--accent)
 const ctaSec = { padding:'10px 18px', borderRadius:10, background:'var(--surface)', color:'var(--text)', border:'1px solid var(--line-2)', display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:500 };
 
 /* ─── SEARCH ─────────────────────────────── */
-function SearchPage({ items, openDetail, t }) {
+function SearchPage({ items, pieces, openDetail, t }) {
+  const piecesList = pieces?.length ? pieces : PIECES
   const [filters, setFilters] = useState({ branche:'', type:'', piece:'', q:'' });
   const filtered = useMemo(() => items.filter(o => {
     if (filters.branche && o.branche !== filters.branche) return false;
@@ -481,7 +580,7 @@ function SearchPage({ items, openDetail, t }) {
   }), [items, filters]);
   const types = [...new Set(items.map(o => o.type))].sort();
   const counts = {};
-  PIECES.forEach(p => counts[p.nom] = items.filter(o=>o.pieceNom===p.nom).length);
+  piecesList.forEach(p => counts[p.nom] = items.filter(o=>o.pieceNom===p.nom).length);
 
   return (
     <div className="rise">
@@ -510,7 +609,7 @@ function SearchPage({ items, openDetail, t }) {
 
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
         <RoomChip room={{nom:'Toutes', icon:'•'}} count={items.length} active={!filters.piece} onClick={()=>setFilters({...filters, piece:''})}/>
-        {PIECES.map(p => <RoomChip key={p.id} room={p} count={counts[p.nom]} active={filters.piece===p.nom} onClick={()=>setFilters({...filters, piece: filters.piece===p.nom?'':p.nom})}/>)}
+        {piecesList.map(p => <RoomChip key={p.id} room={p} count={counts[p.nom]} active={filters.piece===p.nom} onClick={()=>setFilters({...filters, piece: filters.piece===p.nom?'':p.nom})}/>)}
       </div>
 
       <div style={{ display:'flex', gap:12, marginBottom:24, padding:'14px 16px', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:12, alignItems:'center' }}>
@@ -549,24 +648,100 @@ function SearchPage({ items, openDetail, t }) {
 const selectStyle = { padding:'8px 12px', background:'var(--bg-2)', color:'var(--text)', border:'1px solid var(--line)', borderRadius:8, fontSize:13, cursor:'pointer' };
 
 /* ─── LOGIN / VISUALISATION ─────────────── */
-function VisualisationPage({ user, setUser, items, addHistory, openDetail, t }) {
+function VisualisationPage({ user, onLogin, onRegister, onLogout, onSessionRefresh, openDetail, t }) {
   const [filters, setFilters] = useState({ service:'', etat:'', q:'' });
+  const [profile, setProfile] = useState(user);
+  const [services, setServices] = useState([]);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
+  const [profileForm, setProfileForm] = useState({ pseudo:'', bioPublique:'', telephonePrive:'', adressePrivee:'' });
+
+  useEffect(() => {
+    setProfile(user)
+    setProfileForm({
+      pseudo: user?.pseudo || '',
+      bioPublique: user?.bioPublique || '',
+      telephonePrive: user?.telephonePrive || '',
+      adressePrivee: user?.adressePrivee || ''
+    })
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+
+    const run = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const [profileData, servicesData] = await Promise.all([
+          fetchJson('/api/visualisation/profile'),
+          fetchJson('/api/visualisation/services')
+        ])
+
+        const params = new URLSearchParams()
+        if (filters.service) params.set('service', filters.service)
+        if (filters.etat) params.set('etat', filters.etat)
+        if (filters.q) params.set('q', filters.q)
+        const url = params.toString() ? `/api/visualisation/objets?${params}` : '/api/visualisation/objets'
+        const itemsData = await fetchJson(url)
+
+        if (cancelled) return
+
+        const uiProfile = toUiUser(profileData)
+        setProfile(uiProfile)
+        setProfileForm({
+          pseudo: profileData?.pseudo || '',
+          bioPublique: profileData?.bioPublique || '',
+          telephonePrive: profileData?.telephonePrive || '',
+          adressePrivee: profileData?.adressePrivee || ''
+        })
+        setServices(Array.isArray(servicesData) ? servicesData : [])
+        setItems(Array.isArray(itemsData) ? itemsData.map(toUiItem) : [])
+        onSessionRefresh?.()
+      } catch (e) {
+        if (!cancelled) {
+          setError(e.message || 'Erreur de chargement')
+          setItems([])
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    run()
+
+    return () => { cancelled = true }
+  }, [user, filters.service, filters.etat, filters.q, onSessionRefresh])
 
   if (!user) {
-    return <LoginScreen setUser={setUser} addHistory={addHistory} t={t}/>;
+    return <LoginScreen onLogin={onLogin} onRegister={onRegister} t={t} />
   }
 
-  const filtered = items.filter(o => {
-    if (filters.service && o.service !== filters.service) return false;
-    if (filters.etat && o.etat !== filters.etat) return false;
-    if (filters.q && !o.nom.toLowerCase().includes(filters.q.toLowerCase())) return false;
-    return true;
-  });
+  const currentUser = profile || user
+  const currentNiv = NIVEAUX.find(n => n.code === currentUser.niveau) || NIVEAUX[0]
+  const nextNiv = NIVEAUX[NIVEAUX.findIndex(n => n.code === currentUser.niveau) + 1]
+  const xpPct = nextNiv
+    ? Math.max(0, Math.min(100, Math.round((currentUser.points - currentNiv.seuil) / (nextNiv.seuil - currentNiv.seuil) * 100)))
+    : 100
 
-  const currentNiv = NIVEAUX.find(n => n.code === user.niveau);
-  const nextNiv = NIVEAUX[NIVEAUX.findIndex(n => n.code === user.niveau) + 1];
-  const xpPct = nextNiv ? Math.min(100, Math.round((user.points - currentNiv.seuil) / (nextNiv.seuil - currentNiv.seuil) * 100)) : 100;
-  const services = ['Acces','Surveillance','Confort','Animal'];
+  const saveProfile = async (e) => {
+    e.preventDefault()
+    setSaveMsg('')
+    try {
+      const updated = await fetchJson('/api/visualisation/profile', {
+        method: 'PUT',
+        body: JSON.stringify(profileForm)
+      })
+      setProfile(toUiUser(updated))
+      setSaveMsg('Profil mis à jour ✅')
+      onSessionRefresh?.()
+    } catch (e2) {
+      setSaveMsg(`Erreur: ${e2.message}`)
+    }
+  }
 
   return (
     <div className="rise">
@@ -575,7 +750,6 @@ function VisualisationPage({ user, setUser, items, addHistory, openDetail, t }) 
         <h1 className="display" style={{ fontSize:42, lineHeight:1.05 }}>Mon <span className="display-i" style={{color: t.accent}}>tableau de bord</span></h1>
       </div>
 
-      {/* PROFILE */}
       <div style={{
         borderRadius:18, padding:'24px', marginBottom:24,
         background:'linear-gradient(135deg, var(--surface-2), var(--surface))',
@@ -589,44 +763,44 @@ function VisualisationPage({ user, setUser, items, addHistory, openDetail, t }) 
             display:'flex', alignItems:'center', justifyContent:'center',
             fontFamily:"'Fraunces', serif", fontSize:30, fontWeight:600,
             boxShadow:`0 8px 32px ${t.accent}40`,
-          }}>{user.photo}</div>
+          }}>{currentUser.photo}</div>
 
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-              <h3 className="display" style={{ fontSize:24 }}>{user.prenom} {user.nom}</h3>
+              <h3 className="display" style={{ fontSize:24 }}>{currentUser.prenom} {currentUser.nom}</h3>
               <span style={{
                 padding:'3px 10px', borderRadius:99, fontSize:11,
                 background: 'var(--accent-soft)', color: t.accent, fontWeight:600,
-              }}>{user.typeMembre}</span>
+              }}>{currentUser.typeMembre}</span>
             </div>
-            <div className="mono" style={{ fontSize:12, color:'var(--text-3)', marginBottom:8 }}>@{user.pseudo} · {user.email}</div>
+            <div className="mono" style={{ fontSize:12, color:'var(--text-3)', marginBottom:8 }}>@{currentUser.pseudo} · {currentUser.email}</div>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ flex:1, maxWidth:280, height:6, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
                 <div style={{ height:'100%', width:`${xpPct}%`, background: t.accent, borderRadius:99, transition:'width .4s' }}/>
               </div>
               <span className="mono" style={{ fontSize:11, color:'var(--text-3)' }}>
-                {nextNiv ? `${user.points.toFixed(2)} / ${nextNiv.seuil} pts → ${nextNiv.code}` : 'Niveau max'}
+                {nextNiv ? `${currentUser.points.toFixed(2)} / ${nextNiv.seuil} pts → ${nextNiv.code}` : 'Niveau max'}
               </span>
             </div>
           </div>
 
           <div style={{ borderLeft:'1px solid var(--line-2)', paddingLeft:24, textAlign:'center' }}>
             <div className="label" style={{ marginBottom:4 }}>Niveau</div>
-            <div className="display" style={{ fontSize:30, color: t.accent, lineHeight:1 }}>{user.niveau}</div>
-            <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:4 }}>plafond : {user.niveauMax}</div>
+            <div className="display" style={{ fontSize:30, color: t.accent, lineHeight:1 }}>{currentUser.niveau}</div>
+            <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:4 }}>plafond : {currentUser.niveauMax}</div>
           </div>
           <div style={{ borderLeft:'1px solid var(--line-2)', paddingLeft:24, textAlign:'center' }}>
             <div className="label" style={{ marginBottom:4 }}>Points</div>
-            <div className="display num" style={{ fontSize:30, lineHeight:1 }}>{Math.floor(user.points)}</div>
-            <button onClick={()=>setUser(null)} style={{ marginTop:6, fontSize:11, color:'var(--text-3)', padding:'4px 8px' }}>Déconnexion ↗</button>
+            <div className="display num" style={{ fontSize:30, lineHeight:1 }}>{Math.floor(currentUser.points)}</div>
+            <button onClick={onLogout} style={{ marginTop:6, fontSize:11, color:'var(--text-3)', padding:'4px 8px' }}>Déconnexion ↗</button>
           </div>
         </div>
       </div>
 
-      {/* SERVICES */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
-        {services.map(s => {
-          const cnt = items.filter(o=>o.service===s).length;
+        {['Acces','Surveillance','Confort','Animal'].map(s => {
+          const apiService = services.find((x) => x.code === s)
+          const cnt = apiService?.objets ?? items.filter(o => o.service===s).length
           return (
             <div key={s} style={{ borderRadius:14, padding:'18px 20px', background:'var(--surface)', border:'1px solid var(--line)' }}>
               <div className="label">{s}</div>
@@ -646,22 +820,65 @@ function VisualisationPage({ user, setUser, items, addHistory, openDetail, t }) 
         />
         <select value={filters.service} onChange={e=>setFilters({...filters, service:e.target.value})} style={selectStyle}>
           <option value="">Tous services</option>
-          {services.map(s => <option key={s}>{s}</option>)}
+          {['Acces','Surveillance','Confort','Animal'].map(s => <option key={s}>{s}</option>)}
         </select>
         <select value={filters.etat} onChange={e=>setFilters({...filters, etat:e.target.value})} style={selectStyle}>
           <option value="">Tous états</option>
           <option>ACTIF</option><option>INACTIF</option>
         </select>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12 }}>
-        {filtered.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)}/>)}
+
+      {error && <div style={{ marginBottom: 12, color: 'var(--red)', fontSize: 13 }}>{error}</div>}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12, marginBottom:24 }}>
+        {loading ? <p style={{ color:'var(--text-3)' }}>Chargement…</p> : items.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)}/>)}
       </div>
+
+      <form onSubmit={saveProfile} style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
+        <Field label="Pseudo"><input value={profileForm.pseudo} onChange={(e) => setProfileForm((p) => ({ ...p, pseudo: e.target.value }))} style={inputStyle}/></Field>
+        <Field label="Téléphone privé"><input value={profileForm.telephonePrive} onChange={(e) => setProfileForm((p) => ({ ...p, telephonePrive: e.target.value }))} style={inputStyle}/></Field>
+        <div style={{ gridColumn:'span 2' }}><Field label="Bio publique"><input value={profileForm.bioPublique} onChange={(e) => setProfileForm((p) => ({ ...p, bioPublique: e.target.value }))} style={inputStyle}/></Field></div>
+        <div style={{ gridColumn:'span 2' }}><Field label="Adresse privée"><input value={profileForm.adressePrivee} onChange={(e) => setProfileForm((p) => ({ ...p, adressePrivee: e.target.value }))} style={inputStyle}/></Field></div>
+        <div style={{ gridColumn:'span 2', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:12, color: saveMsg.startsWith('Erreur') ? 'var(--red)' : 'var(--text-3)' }}>{saveMsg}</span>
+          <button type="submit" style={{...ctaPri, background:t.accent}}>Enregistrer profil</button>
+        </div>
+      </form>
     </div>
   );
 }
 
-function LoginScreen({ setUser, addHistory, t }) {
+function LoginScreen({ onLogin, onRegister, t }) {
   const [tab, setTab] = useState('login');
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [loginForm, setLoginForm] = useState({ email: 'parent@demo.local', motDePasse: 'demo1234' })
+  const [registerForm, setRegisterForm] = useState({ prenom:'', nom:'', email:'', motDePasse:'', typeMembre:'PARENT_FAMILLE' })
+
+  const runLogin = async (email, motDePasse) => {
+    setLoading(true)
+    setError('')
+    try {
+      await onLogin({ email, motDePasse })
+    } catch (e) {
+      setError(e.message || 'Connexion impossible')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runRegister = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      await onRegister(registerForm)
+    } catch (e) {
+      setError(e.message || 'Inscription impossible')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="rise" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, minHeight:600 }}>
       <div style={{
@@ -676,16 +893,14 @@ function LoginScreen({ setUser, addHistory, t }) {
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:32 }}>
-          <div style={{ fontSize:11, fontFamily:"'Geist Mono', monospace", textTransform:'uppercase', letterSpacing:'.08em', opacity:.6, marginBottom:4 }}>Profils de démo</div>
-          {Object.entries(USERS).map(([k, u]) => (
-            <button key={k} onClick={()=>{ setUser(u); addHistory({ action:'CONNEXION', objetNom:'session', code:`@${u.pseudo}`, utilisateur:u.pseudo, details:'+0.25 pts' }); }}
-              style={{ padding:'12px 14px', background:'rgba(14,17,22,.85)', color:'#fff', borderRadius:10, display:'flex', alignItems:'center', gap:12, transition:'background .15s' }}
-              onMouseEnter={e=>e.currentTarget.style.background='rgba(14,17,22,1)'}
-              onMouseLeave={e=>e.currentTarget.style.background='rgba(14,17,22,.85)'}>
-              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:14, fontWeight:600 }}>{u.photo}</div>
+          <div style={{ fontSize:11, fontFamily:"'Geist Mono', monospace", textTransform:'uppercase', letterSpacing:'.08em', opacity:.6, marginBottom:4 }}>Profils de démo backend</div>
+          {DEMO_CREDENTIALS.map((demo) => (
+            <button key={demo.email} onClick={()=>runLogin(demo.email, demo.motDePasse)}
+              style={{ padding:'12px 14px', background:'rgba(14,17,22,.85)', color:'#fff', borderRadius:10, display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:14, fontWeight:600 }}>{demo.email[0].toUpperCase()}</div>
               <div style={{ flex:1, textAlign:'left' }}>
-                <div style={{ fontSize:13, fontWeight:600 }}>{u.prenom} · <span style={{ opacity:.6, fontWeight:400 }}>{u.typeMembre}</span></div>
-                <div style={{ fontSize:11, opacity:.5, fontFamily:"'Geist Mono', monospace" }}>niveauMax: {u.niveauMax} · {u.points}pts</div>
+                <div style={{ fontSize:13, fontWeight:600 }}>{demo.email}</div>
+                <div style={{ fontSize:11, opacity:.6, fontFamily:"'Geist Mono', monospace" }}>mot de passe: demo1234</div>
               </div>
               <Icon name="chevR" size={14}/>
             </button>
@@ -706,39 +921,40 @@ function LoginScreen({ setUser, addHistory, t }) {
         </div>
 
         {tab==='login' ? (
-          <form onSubmit={e=>{ e.preventDefault(); setUser(USERS.alice); addHistory({ action:'CONNEXION', objetNom:'session', code:'@ali_smart', utilisateur:'alice', details:'+0.25 pts' }); }}>
+          <form onSubmit={(e)=>{ e.preventDefault(); runLogin(loginForm.email, loginForm.motDePasse) }}>
             <h3 className="display" style={{ fontSize:26, marginBottom:24 }}>Heureux de vous revoir.</h3>
             <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
               <Field label="Email">
-                <input type="email" defaultValue="alice@cytech.fr" style={inputStyle}/>
+                <input type="email" value={loginForm.email} onChange={(e)=>setLoginForm((f)=>({ ...f, email: e.target.value }))} style={inputStyle}/>
               </Field>
               <Field label="Mot de passe">
-                <input type="password" defaultValue="••••••••" style={inputStyle}/>
+                <input type="password" value={loginForm.motDePasse} onChange={(e)=>setLoginForm((f)=>({ ...f, motDePasse: e.target.value }))} style={inputStyle}/>
               </Field>
-              <button type="submit" style={{ marginTop:12, padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600, display:'flex', justifyContent:'center', alignItems:'center', gap:8 }}>
-                Se connecter <Icon name="arrow" size={14}/>
+              {error && <div style={{ color:'var(--red)', fontSize:12 }}>{error}</div>}
+              <button disabled={loading} type="submit" style={{ marginTop:12, padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600, display:'flex', justifyContent:'center', alignItems:'center', gap:8 }}>
+                {loading ? 'Connexion...' : <>Se connecter <Icon name="arrow" size={14}/></>}
               </button>
             </div>
           </form>
         ) : (
-          <div>
+          <form onSubmit={(e)=>{ e.preventDefault(); runRegister() }}>
             <h3 className="display" style={{ fontSize:26, marginBottom:24 }}>Créer un compte.</h3>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
-              <Field label="Prénom"><input style={inputStyle}/></Field>
-              <Field label="Nom"><input style={inputStyle}/></Field>
-              <div style={{ gridColumn:'span 2' }}><Field label="Email"><input type="email" style={inputStyle}/></Field></div>
-              <Field label="Pseudo"><input style={inputStyle}/></Field>
-              <Field label="Mot de passe"><input type="password" style={inputStyle}/></Field>
-              <div style={{ gridColumn:'span 2' }}><Field label="Type de membre">
-                <select style={inputStyle}>
-                  <option>ParentFamille — Avancé</option>
-                  <option>Enfant — Intermédiaire</option>
-                  <option>VoisinVisiteur — Débutant</option>
+              <Field label="Prénom"><input value={registerForm.prenom} onChange={(e)=>setRegisterForm((f)=>({ ...f, prenom: e.target.value }))} style={inputStyle}/></Field>
+              <Field label="Nom"><input value={registerForm.nom} onChange={(e)=>setRegisterForm((f)=>({ ...f, nom: e.target.value }))} style={inputStyle}/></Field>
+              <div style={{ gridColumn:'span 2' }}><Field label="Email"><input type="email" value={registerForm.email} onChange={(e)=>setRegisterForm((f)=>({ ...f, email: e.target.value }))} style={inputStyle}/></Field></div>
+              <Field label="Mot de passe"><input type="password" value={registerForm.motDePasse} onChange={(e)=>setRegisterForm((f)=>({ ...f, motDePasse: e.target.value }))} style={inputStyle}/></Field>
+              <Field label="Type de membre">
+                <select value={registerForm.typeMembre} onChange={(e)=>setRegisterForm((f)=>({ ...f, typeMembre: e.target.value }))} style={inputStyle}>
+                  <option value="PARENT_FAMILLE">ParentFamille — Avancé</option>
+                  <option value="ENFANT">Enfant — Intermédiaire</option>
+                  <option value="VOISIN_VISITEUR">VoisinVisiteur — Débutant</option>
                 </select>
-              </Field></div>
+              </Field>
             </div>
-            <button style={{ marginTop:20, width:'100%', padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600 }}>Créer mon compte</button>
-          </div>
+            {error && <div style={{ color:'var(--red)', fontSize:12, marginTop:10 }}>{error}</div>}
+            <button disabled={loading} style={{ marginTop:20, width:'100%', padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600 }}>{loading ? 'Création...' : 'Créer mon compte'}</button>
+          </form>
         )}
       </div>
     </div>
@@ -759,10 +975,40 @@ const inputStyle = {
 };
 
 /* ─── GESTION ──────────────────────────── */
-function GestionPage({ user, items, setItems, history, addHistory, t }) {
+function GestionPage({ user, pieces, openDetail, t }) {
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState('');
+  const [items, setItems] = useState([])
+  const [history, setHistory] = useState([])
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState(initialGestionForm())
+
+  const loadGestion = async () => {
+    if (!user || user.niveauMax !== 'Avancé') return
+    setLoading(true)
+    setError('')
+    try {
+      const [objetsData, historyData, statsData] = await Promise.all([
+        fetchJson('/api/gestion/objets'),
+        fetchJson('/api/gestion/historique?limit=40'),
+        fetchJson('/api/gestion/stats')
+      ])
+      setItems(Array.isArray(objetsData) ? objetsData.map(toUiItem) : [])
+      setHistory(Array.isArray(historyData) ? historyData.map(historyToUiItem) : [])
+      setStats(statsData)
+    } catch (e) {
+      setError(e.message || 'Erreur chargement gestion')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadGestion()
+  }, [user?.email])
 
   if (!user) {
     return (
@@ -792,58 +1038,67 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
     );
   }
 
-  const stats = {
-    total: items.length,
-    actifs: items.filter(o=>o.etat==='ACTIF').length,
-    inactifs: items.filter(o=>o.etat==='INACTIF').length,
-    actions: history.length,
-  };
-  const parPiece = useMemo(() => {
-    const m = {};
-    items.forEach(o => m[o.pieceNom] = (m[o.pieceNom]||0)+1);
-    return Object.entries(m).map(([piece, count]) => ({ piece, count })).sort((a,b)=>b.count-a.count);
-  }, [items]);
+  const parPiece = stats?.parPiece?.map((p) => ({ piece: p.piece, count: p.objets })) || Object.entries(items.reduce((acc, o) => {
+    acc[o.pieceNom] = (acc[o.pieceNom] || 0) + 1
+    return acc
+  }, {})).map(([piece, count]) => ({ piece, count }))
 
   const flash = (s) => { setMsg(s); setTimeout(()=>setMsg(''), 2500); };
 
   const acts = {
-    edit: (o) => { setEditing(o); setShowForm(true); window.scrollTo({top:240, behavior:'smooth'}); },
-    toggle: (o) => {
-      const newEtat = o.etat==='ACTIF' ? 'INACTIF' : 'ACTIF';
-      setItems(p => p.map(x => x.id===o.id ? {...x, etat: newEtat} : x));
-      addHistory({ action: newEtat==='ACTIF'?'ACTIVATION':'DÉSACTIVATION', objetNom:o.nom, code:o.code, utilisateur:user.pseudo, details:`etat → ${newEtat}` });
-      flash(`${o.nom} → ${newEtat.toLowerCase()}`);
+    edit: async (o) => {
+      try {
+        const detail = await fetchJson(`/api/gestion/objets/${o.id}`)
+        setForm(formFromDetail(detail))
+        setEditing(o)
+        setShowForm(true)
+        window.scrollTo({top:240, behavior:'smooth'})
+      } catch (e) {
+        setError(e.message)
+      }
     },
-    delete: (id) => {
-      const o = items.find(x=>x.id===id);
-      setItems(p => p.filter(x => x.id!==id));
-      addHistory({ action:'SUPPRESSION', objetNom:o.nom, code:o.code, utilisateur:user.pseudo, details:null });
-      flash('Objet supprimé.');
+    toggle: async (o) => {
+      try {
+        const newEtat = o.etat==='ACTIF' ? 'INACTIF' : 'ACTIF'
+        await fetchJson(`/api/gestion/objets/${o.id}/etat`, {
+          method: 'PATCH',
+          body: JSON.stringify({ actif: newEtat === 'ACTIF' })
+        })
+        flash(`${o.nom} → ${newEtat.toLowerCase()}`)
+        await loadGestion()
+      } catch (e) {
+        setError(e.message)
+      }
+    },
+    delete: async (id) => {
+      try {
+        await fetchJson(`/api/gestion/objets/${id}`, { method: 'DELETE' })
+        flash('Objet supprimé.')
+        await loadGestion()
+      } catch (e) {
+        setError(e.message)
+      }
     },
   };
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    const f = new FormData(e.target);
-    const obj = {
-      id: editing?.id ?? Date.now(),
-      code: editing?.code ?? `${f.get('type').slice(0,2).toUpperCase()}-${String(Math.floor(Math.random()*900)+100)}`,
-      nom: f.get('nom'), marque: f.get('marque'), type: f.get('type'), branche: f.get('branche'),
-      pieceNom: f.get('piece'), service: f.get('service'), etat: f.get('etat'),
-      connectivite: f.get('connectivite'),
-      batterie: f.get('batterie') ? Number(f.get('batterie')) : null,
-      valeur: f.get('valeur') || (f.get('etat')==='ACTIF'?'En service':'Off'),
-    };
-    if (editing) {
-      setItems(p => p.map(x => x.id===editing.id ? obj : x));
-      addHistory({ action:'MODIFICATION', objetNom:obj.nom, code:obj.code, utilisateur:user.pseudo, details:'champs mis à jour' });
-      flash('Objet mis à jour.');
-    } else {
-      setItems(p => [...p, obj]);
-      addHistory({ action:'CRÉATION', objetNom:obj.nom, code:obj.code, utilisateur:user.pseudo, details:null });
-      flash('Objet créé.');
+    try {
+      const payload = payloadFromForm(form)
+      if (editing) {
+        await fetchJson(`/api/gestion/objets/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+        flash('Objet mis à jour.')
+      } else {
+        await fetchJson('/api/gestion/objets', { method: 'POST', body: JSON.stringify(payload) })
+        flash('Objet créé.')
+      }
+      setShowForm(false)
+      setEditing(null)
+      setForm(initialGestionForm())
+      await loadGestion()
+    } catch (e2) {
+      setError(e2.message)
     }
-    setShowForm(false); setEditing(null);
   };
 
   const fmtTime = (ts) => {
@@ -854,6 +1109,8 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
     if (diff < 86400000) return `il y a ${Math.floor(diff/3600000)} h`;
     return d.toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
   };
+
+  const safePieces = pieces?.length ? pieces : PIECES
 
   return (
     <div className="rise">
@@ -867,6 +1124,9 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
         </button>
       </div>
 
+      {error && <div style={{ marginBottom: 10, color:'var(--red)', fontSize:12 }}>{error}</div>}
+      {loading && <div style={{ marginBottom: 10, color:'var(--text-3)', fontSize:12 }}>Chargement des données...</div>}
+
       {msg && (
         <div className="rise" style={{ borderRadius:10, padding:'10px 16px', marginBottom:16, fontSize:13, background:'var(--green-soft)', color:'var(--green)', border:'1px solid var(--green)40', display:'flex', alignItems:'center', gap:10 }}>
           <Icon name="bell" size={14}/>{msg}
@@ -875,10 +1135,10 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
         {[
-          { l:'Total', v:stats.total, c:'var(--text)', i:'grid' },
-          { l:'Actifs', v:stats.actifs, c:'var(--green)', i:'power' },
-          { l:'Inactifs', v:stats.inactifs, c:'var(--text-3)', i:'close' },
-          { l:'Actions', v:stats.actions, c: t.accent, i:'log' },
+          { l:'Total', v:stats?.totalObjets ?? items.length, c:'var(--text)', i:'grid' },
+          { l:'Actifs', v:stats?.actifs ?? items.filter(o=>o.etat==='ACTIF').length, c:'var(--green)', i:'power' },
+          { l:'Inactifs', v:stats?.inactifs ?? items.filter(o=>o.etat==='INACTIF').length, c:'var(--text-3)', i:'close' },
+          { l:'Actions', v:stats?.actionsHistorique ?? history.length, c: t.accent, i:'log' },
         ].map(k => (
           <div key={k.l} style={{ borderRadius:14, padding:'18px 20px', background:'var(--surface)', border:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div>
@@ -894,45 +1154,31 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
         <form onSubmit={submit} className="rise" style={{ borderRadius:18, padding:'24px', marginBottom:24, background:'var(--surface)', border:`1px solid ${t.accent}40` }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
             <h3 className="display" style={{ fontSize:22 }}>{editing ? <>Modifier <span className="display-i" style={{color: t.accent}}>{editing.nom}</span></> : 'Nouvel objet connecté'}</h3>
-            <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); }} style={iconBtn}><Icon name="close" size={14}/></button>
+            <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); setForm(initialGestionForm()) }} style={iconBtn}><Icon name="close" size={14}/></button>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14 }}>
-            <Field label="Nom"><input name="nom" required style={inputStyle} placeholder="Thermostat…" defaultValue={editing?.nom||''}/></Field>
-            <Field label="Marque"><input name="marque" style={inputStyle} placeholder="Netatmo" defaultValue={editing?.marque||''}/></Field>
-            <Field label="Branche">
-              <select name="branche" style={inputStyle} defaultValue={editing?.branche||'Capteur'}>
-                {['Ouvrant','Capteur','Appareil','BesoinAnimal'].map(b => <option key={b}>{b}</option>)}
-              </select>
-            </Field>
+            <Field label="Nom"><input required style={inputStyle} value={form.nom} onChange={(e)=>setForm((f)=>({ ...f, nom: e.target.value }))}/></Field>
+            <Field label="Marque"><input style={inputStyle} value={form.marque} onChange={(e)=>setForm((f)=>({ ...f, marque: e.target.value }))}/></Field>
             <Field label="Type">
-              <select name="type" style={inputStyle} defaultValue={editing?.type||'Thermostat'}>
-                {['Porte','PorteGarage','Volet','Fenetre','Thermostat','Climatiseur','Camera','Alarme','DetecteurMouvement','LaveLinge','Television','MachineCafe','Aspirateur','Eau','Nourriture'].map(t => <option key={t}>{t}</option>)}
+              <select style={inputStyle} value={form.type} onChange={(e)=>setForm((f)=>({ ...f, type: e.target.value }))}>
+                {GESTION_TYPE_OPTIONS.map(tp => <option key={tp}>{tp}</option>)}
               </select>
             </Field>
             <Field label="Pièce">
-              <select name="piece" style={inputStyle} defaultValue={editing?.pieceNom||PIECES[0].nom}>
-                {PIECES.map(p => <option key={p.id}>{p.nom}</option>)}
+              <select style={inputStyle} value={form.pieceId} onChange={(e)=>setForm((f)=>({ ...f, pieceId: e.target.value }))}>
+                <option value="">Sélectionner</option>
+                {safePieces.map(p => <option key={p.id} value={String(p.id)}>{p.nom}</option>)}
               </select>
             </Field>
-            <Field label="Service">
-              <select name="service" style={inputStyle} defaultValue={editing?.service||'Confort'}>
-                {['Acces','Surveillance','Confort','Animal'].map(s => <option key={s}>{s}</option>)}
-              </select>
-            </Field>
-            <Field label="État">
-              <select name="etat" style={inputStyle} defaultValue={editing?.etat||'ACTIF'}>
-                <option>ACTIF</option><option>INACTIF</option>
-              </select>
-            </Field>
-            <Field label="Connectivité">
-              <select name="connectivite" style={inputStyle} defaultValue={editing?.connectivite||'WIFI'}>
-                <option>WIFI</option><option>BLUETOOTH</option>
-              </select>
-            </Field>
-            <Field label="Batterie %"><input name="batterie" type="number" min="0" max="100" style={inputStyle} placeholder="0–100" defaultValue={editing?.batterie||''}/></Field>
-            <Field label="Valeur affichée"><input name="valeur" style={inputStyle} placeholder="ex : 21.5°C" defaultValue={editing?.valeur||''}/></Field>
+            <Field label="État"><select style={inputStyle} value={form.etat} onChange={(e)=>setForm((f)=>({ ...f, etat: e.target.value }))}><option>ACTIF</option><option>INACTIF</option></select></Field>
+            <Field label="Connectivité"><select style={inputStyle} value={form.connectivite} onChange={(e)=>setForm((f)=>({ ...f, connectivite: e.target.value }))}><option>WIFI</option><option>BLUETOOTH</option></select></Field>
+            <Field label="Batterie %"><input type="number" min="0" max="100" style={inputStyle} value={form.batterie} onChange={(e)=>setForm((f)=>({ ...f, batterie: e.target.value }))}/></Field>
+            {(form.type === 'Porte' || form.type === 'Volet') && <Field label="Position"><input type="number" style={inputStyle} value={form.position} onChange={(e)=>setForm((f)=>({ ...f, position: e.target.value }))}/></Field>}
+            {(form.type === 'Thermostat' || form.type === 'Camera') && <Field label="Zone"><input style={inputStyle} value={form.zone} onChange={(e)=>setForm((f)=>({ ...f, zone: e.target.value }))}/></Field>}
+            {(form.type === 'Television' || form.type === 'LaveLinge') && <><Field label="Cycle"><input style={inputStyle} value={form.cycle} onChange={(e)=>setForm((f)=>({ ...f, cycle: e.target.value }))}/></Field><Field label="Conso énergie"><input type="number" step="0.1" style={inputStyle} value={form.consoEnergie} onChange={(e)=>setForm((f)=>({ ...f, consoEnergie: e.target.value }))}/></Field></>}
+            {(form.type === 'Nourriture' || form.type === 'Eau') && <><Field label="Niveau"><input type="number" step="0.1" style={inputStyle} value={form.niveau} onChange={(e)=>setForm((f)=>({ ...f, niveau: e.target.value }))}/></Field><Field label="Animal"><input style={inputStyle} value={form.animal} onChange={(e)=>setForm((f)=>({ ...f, animal: e.target.value }))}/></Field></>}
             <div style={{ gridColumn:'span 2', display:'flex', alignItems:'flex-end', gap:8, justifyContent:'flex-end' }}>
-              <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); }} style={ctaSec}>Annuler</button>
+              <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); setForm(initialGestionForm()) }} style={ctaSec}>Annuler</button>
               <button type="submit" style={{...ctaPri, background: t.accent}}>{editing?'Enregistrer':'Créer'} <Icon name="arrow" size={13}/></button>
             </div>
           </div>
@@ -944,7 +1190,7 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
         <span className="label">Actions × objet</span>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12, marginBottom:32 }}>
-        {items.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} actions={acts}/>)}
+        {items.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)} actions={acts}/>) }
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
@@ -978,8 +1224,8 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
           </div>
           <div style={{ maxHeight:340, overflowY:'auto', display:'flex', flexDirection:'column', gap:10 }}>
             {history.slice().reverse().map(h => {
-              const isNeg = h.action.includes('SUPPR') || h.action.includes('DÉSACT');
-              const c = isNeg ? 'var(--red)' : (h.action==='CONNEXION' ? 'var(--blue)' : 'var(--green)');
+              const isNeg = h.action.includes('DELETE') || h.action.includes('SUPPR') || h.action.includes('DÉSACT') || h.action.includes('INACTIF');
+              const c = isNeg ? 'var(--red)' : (h.action.includes('LOGIN') || h.action.includes('CONNEXION') ? 'var(--blue)' : 'var(--green)');
               return (
                 <div key={h.id} style={{ display:'flex', gap:12, alignItems:'flex-start', padding:'10px 12px', borderRadius:10, background:'var(--bg-2)' }}>
                   <div style={{ width:6, height:6, borderRadius:'50%', background: c, marginTop:6, flexShrink:0 }}/>
@@ -1003,22 +1249,148 @@ function GestionPage({ user, items, setItems, history, addHistory, t }) {
   );
 }
 
+function initialGestionForm() {
+  return {
+    type: 'Porte',
+    nom: '',
+    marque: '',
+    pieceId: '',
+    etat: 'ACTIF',
+    connectivite: 'WIFI',
+    batterie: '',
+    position: '',
+    zone: '',
+    cycle: '',
+    consoEnergie: '',
+    niveau: '',
+    animal: ''
+  }
+}
+
+function formFromDetail(detail) {
+  return {
+    type: detail?.type || 'Porte',
+    nom: detail?.nom || '',
+    marque: detail?.marque || '',
+    pieceId: detail?.pieceId != null ? String(detail.pieceId) : '',
+    etat: detail?.etat || 'ACTIF',
+    connectivite: detail?.connectivite || 'WIFI',
+    batterie: detail?.batterie ?? '',
+    position: detail?.position ?? '',
+    zone: detail?.zone ?? '',
+    cycle: detail?.cycle ?? '',
+    consoEnergie: detail?.consoEnergie ?? '',
+    niveau: detail?.niveau ?? '',
+    animal: detail?.animal ?? ''
+  }
+}
+
+function payloadFromForm(form) {
+  return {
+    type: form.type,
+    nom: form.nom,
+    marque: trimToNull(form.marque),
+    pieceId: toNullableInteger(form.pieceId),
+    etat: form.etat,
+    connectivite: form.connectivite,
+    batterie: toNullableFloat(form.batterie),
+    position: toNullableInteger(form.position),
+    zone: trimToNull(form.zone),
+    cycle: trimToNull(form.cycle),
+    consoEnergie: toNullableFloat(form.consoEnergie),
+    niveau: toNullableFloat(form.niveau),
+    animal: trimToNull(form.animal)
+  }
+}
+
+function trimToNull(v) {
+  if (v == null) return null
+  const t = String(v).trim()
+  return t ? t : null
+}
+
+function toNullableInteger(v) {
+  const t = trimToNull(v)
+  return t == null ? null : Number.parseInt(t, 10)
+}
+
+function toNullableFloat(v) {
+  const t = trimToNull(v)
+  return t == null ? null : Number.parseFloat(t)
+}
+
 /* ─── APP SHELL ────────────────────────── */
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [page, setPage] = useState('home');
   const [user, setUser] = useState(null);
-  const [items, setItems] = useState(OBJETS_INIT);
-  const [history, setHistory] = useState(HISTORY_BASE);
+  const [items, setItems] = useState([]);
+  const [pieces, setPieces] = useState(PIECES);
   const [detail, setDetail] = useState(null);
+  const [health, setHealth] = useState({ state: 'loading' })
 
-  const addHistory = (h) => {
-    setHistory(p => [...p, { id: Date.now(), timestamp: Date.now(), ...h }]);
-    if (user) setUser(u => ({ ...u, points: u.points + (h.action === 'CONNEXION' ? 0.25 : 0.5) }));
-  };
+  const refreshSession = async () => {
+    try {
+      const me = await fetchJson('/api/auth/me')
+      setUser(toUiUser(me))
+    } catch {
+      setUser(null)
+    }
+  }
+
+  const refreshPublic = async () => {
+    try {
+      const [healthData, piecesData, itemsData] = await Promise.all([
+        fetchJson('/api/health').catch(() => null),
+        fetchJson('/api/info/pieces').catch(() => []),
+        fetchJson('/api/info/objets').catch(() => [])
+      ])
+      if (healthData) setHealth({ state: 'ok', data: healthData })
+      else setHealth({ state: 'error' })
+      if (Array.isArray(piecesData) && piecesData.length) {
+        setPieces(piecesData.map((p, idx) => ({
+          id: p.id,
+          nom: p.nom,
+          surface: p.surface || PIECES[idx % PIECES.length]?.surface || 12,
+          type: p.type || p.nom,
+          icon: PIECES.find((x) => x.nom === p.nom)?.icon || '•'
+        })))
+      }
+      setItems(Array.isArray(itemsData) ? itemsData.map(toUiItem) : [])
+    } catch {
+      setHealth({ state: 'error' })
+      setItems([])
+    }
+  }
+
+  useEffect(() => {
+    refreshSession()
+    refreshPublic()
+  }, [])
+
+  const handleLogin = async ({ email, motDePasse }) => {
+    const data = await fetchJson('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, motDePasse })
+    })
+    setUser(toUiUser(data))
+  }
+
+  const handleRegister = async (payload) => {
+    const data = await fetchJson('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+    setUser(toUiUser(data))
+  }
+
+  const handleLogout = async () => {
+    await fetchJson('/api/auth/logout', { method: 'POST' })
+    setUser(null)
+  }
+
   const openDetail = (o) => {
     setDetail(o);
-    if (user) setUser(u => ({ ...u, points: u.points + 0.5 }));
   };
 
   useEffect(() => {
@@ -1030,16 +1402,24 @@ function App() {
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [page]);
 
   const renderPage = () => {
-    const props = { user, setUser, items, setItems, history, addHistory, openDetail, t };
-    if (page==='home') return <HomePage {...props} user={user || USERS.alice}/>;
-    if (page==='recherche') return <SearchPage {...props}/>;
-    if (page==='visualisation') return <VisualisationPage {...props}/>;
-    if (page==='gestion') return <GestionPage {...props}/>;
+    const props = { user, items, pieces, openDetail, t, health };
+    if (page==='home') return <HomePage {...props} />;
+    if (page==='recherche') return <SearchPage {...props} />;
+    if (page==='visualisation') return (
+      <VisualisationPage
+        {...props}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onLogout={handleLogout}
+        onSessionRefresh={refreshSession}
+      />
+    )
+    if (page==='gestion') return <GestionPage {...props} />;
+    return null
   };
 
   return (
     <div style={{ minHeight:'100vh', display:'grid', gridTemplateColumns:'240px 1fr', position:'relative', zIndex:1 }}>
-      {/* SIDEBAR */}
       <aside style={{
         background:'var(--bg-2)', borderRight:'1px solid var(--line)',
         padding:'24px 16px', display:'flex', flexDirection:'column',
@@ -1073,7 +1453,7 @@ function App() {
                 <Icon name={p.icon} size={16}/>
                 <span style={{ flex:1, textAlign:'left' }}>{p.label}</span>
                 {locked && <Icon name="lock" size={11}/>}
-                {active && <span style={{ width:4, height:4, borderRadius:'50%', background: t.accent, boxShadow:`0 0 6px ${t.accent}` }}/>}
+                {active && <span style={{ width:4, height:4, borderRadius:'50%', background: t.accent, boxShadow:`0 0 6px ${t.accent}` }}/>} 
               </button>
             );
           })}
@@ -1087,7 +1467,7 @@ function App() {
                 <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
                 <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts</div>
               </div>
-              <button onClick={()=>setUser(null)} style={iconBtn}><Icon name="power" size={12}/></button>
+              <button onClick={handleLogout} style={iconBtn}><Icon name="power" size={12}/></button>
             </div>
           ) : (
             <button onClick={()=>setPage('visualisation')} style={{ width:'100%', padding:'8px', fontSize:12, color:'var(--text-2)', display:'flex', alignItems:'center', gap:8 }}>
@@ -1097,8 +1477,8 @@ function App() {
         </div>
 
         <div className="mono" style={{ fontSize:9, color:'var(--text-4)', marginTop:14, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-          <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)' }}/>
-          Backend en ligne · v4.0
+          <span style={{ width:6, height:6, borderRadius:'50%', background: health.state === 'ok' ? 'var(--green)' : 'var(--red)' }}/>
+          {health.state === 'ok' ? 'Backend en ligne · v4.0' : 'Backend injoignable'}
         </div>
       </aside>
 
