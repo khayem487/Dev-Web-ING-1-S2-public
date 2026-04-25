@@ -1,1503 +1,1123 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
-const TYPE_OPTIONS = [
-    '',
-    'Ouvrant',
-    'Capteur',
-    'Appareil',
-    'BesoinAnimal',
-    'Porte',
-    'Volet',
-    'Thermostat',
-    'Camera',
-    'Television',
-    'LaveLinge',
-    'Nourriture',
-    'Eau'
-]
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "#ffb547",
+  "scheme": "dark",
+  "compact": false,
+  "houseName": "Famille Martin"
+}/*EDITMODE-END*/;
 
-const SERVICE_OPTIONS = ['', 'Acces', 'Surveillance', 'Confort', 'Animal']
-const ETAT_OPTIONS = ['', 'ACTIF', 'INACTIF']
-const GESTION_TYPE_OPTIONS = ['Porte', 'Volet', 'Thermostat', 'Camera', 'Television', 'LaveLinge', 'Nourriture', 'Eau']
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
-const DEMO_ACCOUNTS = [
-    {
-        key: 'parent',
-        role: 'ParentFamille',
-        niveauMax: 'Avancé',
-        email: 'parent@demo.local',
-        motDePasse: 'demo1234'
-    },
-    {
-        key: 'enfant',
-        role: 'Enfant',
-        niveauMax: 'Intermédiaire',
-        email: 'enfant@demo.local',
-        motDePasse: 'demo1234'
-    },
-    {
-        key: 'voisin',
-        role: 'VoisinVisiteur',
-        niveauMax: 'Débutant',
-        email: 'voisin@demo.local',
-        motDePasse: 'demo1234'
-    }
-]
+function useTweaks(defaults) {
+  const [state, setState] = useState(defaults)
+  const setTweak = (key, value) => setState((prev) => ({ ...prev, [key]: value }))
+  return [state, setTweak]
+}
 
-export default function App() {
-    const [health, setHealth] = useState({ state: 'loading' })
-    const [sessionUser, setSessionUser] = useState(null)
-    const [sessionReady, setSessionReady] = useState(false)
-    const [selectedObject, setSelectedObject] = useState(null)
+function TweaksPanel() {
+  return null
+}
 
-    useEffect(() => {
-        let cancelled = false
+function TweakSection() {
+  return null
+}
 
-        fetchJson('/api/health')
-            .then((data) => {
-                if (!cancelled) setHealth({ state: 'ok', data })
-            })
-            .catch((err) => {
-                if (!cancelled) setHealth({ state: 'error', message: err.message })
-            })
+function TweakText() {
+  return null
+}
 
-        return () => {
-            cancelled = true
-        }
-    }, [])
+function TweakColor() {
+  return null
+}
 
-    const refreshSession = useCallback(async () => {
-        try {
-            const me = await fetchJson('/api/auth/me')
-            setSessionUser(me)
-        } catch {
-            setSessionUser(null)
-        } finally {
-            setSessionReady(true)
-        }
-    }, [])
+function TweakToggle() {
+  return null
+}
 
-    useEffect(() => {
-        refreshSession()
-    }, [refreshSession])
+/* ─── DATA ──────────────────────────────────────── */
+const PIECES = [
+  { id:1, nom:'Salon', surface:28, type:'Salon', icon:'🛋' },
+  { id:2, nom:'Cuisine', surface:14, type:'Cuisine', icon:'🍳' },
+  { id:3, nom:'Chambre', surface:18, type:'Chambre', icon:'🛏' },
+  { id:4, nom:'Salle de bain', surface:7, type:'SalleDeBain', icon:'🛁' },
+  { id:5, nom:'Garage', surface:22, type:'Garage', icon:'🚗' },
+  { id:6, nom:'Toilettes', surface:3, type:'Toilettes', icon:'🚽' },
+];
 
-    return (
-        <div className="app-shell">
-            <a href="#main-content" className="skip-link">Aller au contenu principal</a>
+const ICONS = {
+  Thermostat:'thermo', Camera:'cam', PorteGarage:'door-g', Volet:'volet',
+  LaveLinge:'wash', Television:'tv', Eau:'water', Nourriture:'food',
+  Alarme:'alarm', MachineCafe:'coffee', Porte:'door', Climatiseur:'cool',
+  Fenetre:'window', DetecteurMouvement:'motion', Aspirateur:'vacuum'
+};
 
-            <header className="app-header">
-                <div>
-                    <h1>Maison Intelligente</h1>
-                    <p>Projet Dev Web ING1 — modules Information + Visualisation + Gestion (MVP)</p>
-                </div>
-                <nav aria-label="Navigation principale">
-                    <NavLink to="/" end>
-                        Accueil
-                    </NavLink>
-                    <NavLink to="/recherche">Recherche</NavLink>
-                    <NavLink to="/visualisation">Visualisation</NavLink>
-                    <NavLink to="/gestion">Gestion</NavLink>
-                </nav>
-            </header>
+const OBJETS_INIT = [
+  { id:1, code:'TH-001', nom:'Thermostat Salon', type:'Thermostat', branche:'Capteur', marque:'Netatmo', pieceNom:'Salon', service:'Confort', etat:'ACTIF', connectivite:'WIFI', batterie:87, valeur:'21.5°C', cible:22 },
+  { id:2, code:'CM-014', nom:'Caméra Entrée', type:'Camera', branche:'Capteur', marque:'Arlo', pieceNom:'Salon', service:'Surveillance', etat:'ACTIF', connectivite:'WIFI', batterie:62, valeur:'4K · enregistre' },
+  { id:3, code:'PG-002', nom:'Porte Garage', type:'PorteGarage', branche:'Ouvrant', marque:'Somfy', pieceNom:'Garage', service:'Acces', etat:'INACTIF', connectivite:'BLUETOOTH', batterie:15, valeur:'Fermée' },
+  { id:4, code:'VL-007', nom:'Volet Chambre', type:'Volet', branche:'Ouvrant', marque:'Velux', pieceNom:'Chambre', service:'Confort', etat:'ACTIF', connectivite:'WIFI', batterie:100, valeur:'60% ouvert' },
+  { id:5, code:'LL-003', nom:'Lave-Linge', type:'LaveLinge', branche:'Appareil', marque:'Bosch', pieceNom:'Salle de bain', service:'Confort', etat:'ACTIF', connectivite:'WIFI', batterie:null, valeur:'Coton 40°' },
+  { id:6, code:'TV-005', nom:'TV Samsung', type:'Television', branche:'Appareil', marque:'Samsung', pieceNom:'Salon', service:'Confort', etat:'INACTIF', connectivite:'WIFI', batterie:null, valeur:'En veille' },
+  { id:7, code:'EU-008', nom:'Distributeur eau', type:'Eau', branche:'BesoinAnimal', marque:'PetSafe', pieceNom:'Cuisine', service:'Animal', etat:'ACTIF', connectivite:'BLUETOOTH', batterie:45, valeur:'70% plein' },
+  { id:8, code:'NR-009', nom:'Distrib. croquettes', type:'Nourriture', branche:'BesoinAnimal', marque:'SureFeed', pieceNom:'Cuisine', service:'Animal', etat:'ACTIF', connectivite:'WIFI', batterie:72, valeur:'40% restant' },
+  { id:9, code:'AL-011', nom:'Alarme Entrée', type:'Alarme', branche:'Capteur', marque:'Verisure', pieceNom:'Salon', service:'Surveillance', etat:'ACTIF', connectivite:'WIFI', batterie:90, valeur:'Armée' },
+  { id:10, code:'MC-012', nom:'Machine à café', type:'MachineCafe', branche:'Appareil', marque:'Nespresso', pieceNom:'Cuisine', service:'Confort', etat:'ACTIF', connectivite:'BLUETOOTH', batterie:null, valeur:'Prête' },
+  { id:11, code:'PT-013', nom:'Porte d\'entrée', type:'Porte', branche:'Ouvrant', marque:'Yale', pieceNom:'Salon', service:'Acces', etat:'ACTIF', connectivite:'WIFI', batterie:78, valeur:'Verrouillée' },
+  { id:12, code:'CL-015', nom:'Climatiseur', type:'Climatiseur', branche:'Capteur', marque:'Daikin', pieceNom:'Chambre', service:'Confort', etat:'INACTIF', connectivite:'WIFI', batterie:null, valeur:'Off' },
+];
 
-            <main id="main-content" className="app-main" tabIndex="-1">
-                <Routes>
-                    <Route
-                        path="/"
-                        element={
-                            <HomePage
-                                health={health}
-                                sessionUser={sessionUser}
-                                onOpenDetail={setSelectedObject}
-                            />
-                        }
-                    />
-                    <Route path="/recherche" element={<SearchPage onOpenDetail={setSelectedObject} />} />
-                    <Route
-                        path="/visualisation"
-                        element={
-                            <VisualisationPage
-                                sessionUser={sessionUser}
-                                sessionReady={sessionReady}
-                                onSessionRefresh={refreshSession}
-                                onOpenDetail={setSelectedObject}
-                            />
-                        }
-                    />
-                    <Route
-                        path="/gestion"
-                        element={
-                            <GestionPage
-                                sessionUser={sessionUser}
-                                sessionReady={sessionReady}
-                                onSessionRefresh={refreshSession}
-                                onOpenDetail={setSelectedObject}
-                            />
-                        }
-                    />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </main>
+const HISTORY_BASE = [
+  { id:1, action:'CRÉATION', objetNom:'Thermostat Salon', code:'TH-001', timestamp:Date.now()-86400000*3, utilisateur:'alice', details:null },
+  { id:2, action:'ACTIVATION', objetNom:'Caméra Entrée', code:'CM-014', timestamp:Date.now()-86400000*2, utilisateur:'bob', details:'etat → ACTIF' },
+  { id:3, action:'MODIFICATION', objetNom:'Porte Garage', code:'PG-002', timestamp:Date.now()-86400000, utilisateur:'alice', details:'batterie 35 → 15' },
+  { id:4, action:'DÉSACTIVATION', objetNom:'TV Samsung', code:'TV-005', timestamp:Date.now()-3600000*5, utilisateur:'alice', details:null },
+];
 
-            <ObjectDetailModal item={selectedObject} onClose={() => setSelectedObject(null)} />
+const USERS = {
+  alice: { prenom:'Alice', nom:'Martin', pseudo:'ali_smart', email:'alice@cytech.fr', typeMembre:'ParentFamille', niveau:'Avancé', niveauMax:'Avancé', points:240, age:42, photo:'AM' },
+  jules: { prenom:'Jules', nom:'Martin', pseudo:'juju12', email:'jules@cytech.fr', typeMembre:'Enfant', niveau:'Intermédiaire', niveauMax:'Intermédiaire', points:118, age:12, photo:'JM' },
+  paul:  { prenom:'Paul', nom:'Voisin', pseudo:'paul_v', email:'paul@cytech.fr', typeMembre:'VoisinVisiteur', niveau:'Débutant', niveauMax:'Débutant', points:34, age:35, photo:'PV' },
+};
 
-            <footer className="app-footer">CY Tech · ING1 · Maison connectée</footer>
+const NIVEAUX = [
+  { code:'Débutant', seuil:0 }, { code:'Intermédiaire', seuil:50 },
+  { code:'Avancé', seuil:200 }, { code:'Expert', seuil:500 }
+];
+
+const PAGES = [
+  { id:'home', label:'Accueil', icon:'home' },
+  { id:'recherche', label:'Recherche', icon:'search' },
+  { id:'visualisation', label:'Mes objets', icon:'grid' },
+  { id:'gestion', label:'Gestion', icon:'settings' },
+];
+
+/* ─── ICONOGRAPHY ─────────────────────────────── */
+function Icon({ name, size=18 }) {
+  const s = { width: size, height: size, stroke:'currentColor', fill:'none', strokeWidth: 1.7, strokeLinecap:'round', strokeLinejoin:'round' };
+  const p = {
+    home: <><path d="M3 11l9-7 9 7v9a2 2 0 01-2 2h-3v-7H10v7H7a2 2 0 01-2-2v-9z"/></>,
+    search: <><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></>,
+    grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></>,
+    thermo: <><path d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4 4 0 105 0z"/></>,
+    cam: <><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></>,
+    'door-g': <><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18"/></>,
+    volet: <><rect x="3" y="3" width="18" height="18"/><path d="M3 8h18M3 13h18M3 18h18"/></>,
+    wash: <><rect x="3" y="2" width="18" height="20" rx="2"/><circle cx="12" cy="13" r="5"/><circle cx="7" cy="6" r="0.5" fill="currentColor"/></>,
+    tv: <><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M17 3l-5 4-5-4"/></>,
+    water: <><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0L12 2.69z"/></>,
+    food: <><path d="M3 2v6c0 1.1.9 2 2 2h0c1.1 0 2-.9 2-2V2M5 10v12M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></>,
+    alarm: <><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3L2 6M22 6l-3-3"/></>,
+    coffee: <><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/></>,
+    door: <><path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M14 12v.01"/></>,
+    cool: <><path d="M12 2v20M6.34 6.34l11.32 11.32M2 12h20M17.66 6.34L6.34 17.66"/></>,
+    window: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/></>,
+    motion: <><circle cx="12" cy="5" r="2"/><path d="M10 22v-6l-2-3 2-4 4 1 3 4M14 22v-7"/></>,
+    vacuum: <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></>,
+    plus: <><path d="M12 5v14M5 12h14"/></>,
+    edit: <><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></>,
+    trash: <><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></>,
+    power: <><path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10"/></>,
+    arrow: <><path d="M5 12h14M13 5l7 7-7 7"/></>,
+    close: <><path d="M18 6L6 18M6 6l12 12"/></>,
+    user: <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+    bolt: <><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></>,
+    wifi: <><path d="M5 12.55a11 11 0 0114 0M8.53 16.11a6 6 0 016.95 0M12 20h.01M1.42 9a16 16 0 0121.16 0"/></>,
+    bt: <><path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11"/></>,
+    lock: <><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></>,
+    chevR: <><path d="M9 18l6-6-6-6"/></>,
+    bell: <><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></>,
+    log: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></>,
+    chart: <><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></>,
+  };
+  return <svg viewBox="0 0 24 24" style={s}>{p[name] || p.grid}</svg>;
+}
+
+/* ─── ROOM CHIP ─────────────────────────────── */
+function RoomChip({ room, count, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      padding:'10px 14px', borderRadius:99, border:'1px solid var(--line-2)',
+      background: active ? 'var(--accent)' : 'var(--surface)',
+      color: active ? '#0e1116' : 'var(--text)',
+      display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:500,
+      transition:'all .15s',
+    }}>
+      <span style={{ fontSize:16 }}>{room.icon}</span>{room.nom}
+      {count != null && <span className="mono num" style={{
+        fontSize:11, padding:'2px 6px', borderRadius:99,
+        background: active ? 'rgba(14,17,22,.15)' : 'var(--bg-3)',
+        color: active ? '#0e1116' : 'var(--text-2)',
+      }}>{count}</span>}
+    </button>
+  );
+}
+
+/* ─── DEVICE TILE ─────────────────────────────── */
+function DeviceTile({ obj, idx, onClick, actions, compact }) {
+  const active = obj.etat === 'ACTIF';
+  const lowBat = obj.batterie != null && obj.batterie < 20;
+  return (
+    <article onClick={onClick} style={{
+      cursor: onClick ? 'pointer' : 'default', position:'relative',
+      borderRadius: 16, padding: compact ? '16px' : '20px',
+      background: active ? 'linear-gradient(135deg, var(--surface-2), var(--surface))' : 'var(--surface)',
+      border: '1px solid var(--line)', overflow:'hidden',
+      display:'flex', flexDirection:'column', gap: compact ? 12 : 16,
+      transition:'transform .18s, border-color .18s',
+    }} onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--line-2)'; e.currentTarget.style.transform='translateY(-2px)';}}
+       onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--line)'; e.currentTarget.style.transform='translateY(0)';}}>
+
+      {active && <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'radial-gradient(circle, var(--accent-soft), transparent 70%)' }}/>}
+
+      <header style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', position:'relative' }}>
+        <div style={{
+          width: 44, height:44, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center',
+          background: active ? 'var(--accent-soft)' : 'var(--bg-3)',
+          color: active ? 'var(--accent)' : 'var(--text-3)',
+        }}>
+          <Icon name={ICONS[obj.type] || 'grid'} size={22}/>
         </div>
-    )
+        <div style={{ display:'flex', alignItems:'center', gap:6, position:'relative' }}>
+          {active && <span style={{ position:'absolute', inset:0, borderRadius:'50%', background:'var(--green)', opacity:.4, animation:'ping 2s ease-out infinite' }}/>}
+          <div style={{
+            width:8, height:8, borderRadius:'50%', position:'relative',
+            background: active ? 'var(--green)' : 'var(--text-4)',
+          }}/>
+          <span className="label" style={{ fontSize:9, color: active ? 'var(--green)' : 'var(--text-4)' }}>{active?'ON':'OFF'}</span>
+        </div>
+      </header>
+
+      <div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+          <span className="mono" style={{ fontSize:10, color:'var(--text-4)' }}>{obj.code}</span>
+          <span style={{ width:3, height:3, borderRadius:'50%', background:'var(--text-4)' }}/>
+          <span className="label" style={{ fontSize:9, color:'var(--text-3)' }}>{obj.branche}</span>
+        </div>
+        <h3 className="display" style={{ fontSize: compact ? 18 : 20, lineHeight:1.15, color:'var(--text)' }}>{obj.nom}</h3>
+        <div style={{ fontSize:12, color:'var(--text-3)', marginTop:4 }}>{obj.pieceNom} · {obj.marque}</div>
+      </div>
+
+      {obj.valeur && (
+        <div style={{
+          padding:'10px 12px', borderRadius:10, background:'var(--bg-2)',
+          fontSize:13, color: active ? 'var(--text)' : 'var(--text-3)',
+          display:'flex', justifyContent:'space-between', alignItems:'center',
+        }}>
+          <span style={{ color:'var(--text-3)', fontSize:11 }}>État</span>
+          <span className="display" style={{ fontSize:16, color: active ? 'var(--accent)' : 'var(--text-2)' }}>{obj.valeur}</span>
+        </div>
+      )}
+
+      <footer style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'auto', gap:8 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11, color:'var(--text-3)' }}>
+          <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+            <Icon name={obj.connectivite === 'WIFI' ? 'wifi' : 'bt'} size={12}/>
+          </span>
+          {obj.batterie != null && (
+            <span style={{ display:'flex', alignItems:'center', gap:5, color: lowBat ? 'var(--red)' : 'var(--text-3)' }}>
+              <Icon name="bolt" size={11}/>
+              <span className="num mono" style={{ fontSize:11 }}>{obj.batterie}%</span>
+            </span>
+          )}
+        </div>
+        {actions ? (
+          <div style={{ display:'flex', gap:4 }} onClick={e=>e.stopPropagation()}>
+            <button onClick={()=>actions.toggle(obj)} style={iconBtn}><Icon name="power" size={13}/></button>
+            <button onClick={()=>actions.edit(obj)} style={iconBtn}><Icon name="edit" size={13}/></button>
+            <button onClick={()=>actions.delete(obj.id)} style={{...iconBtn, color:'var(--red)'}}><Icon name="trash" size={13}/></button>
+          </div>
+        ) : (
+          <Icon name="chevR" size={14}/>
+        )}
+      </footer>
+    </article>
+  );
 }
+const iconBtn = {
+  width:28, height:28, borderRadius:8, background:'var(--bg-3)', color:'var(--text-2)',
+  display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s',
+};
 
-function HomePage({ health, sessionUser, onOpenDetail }) {
-    const [piecesCount, setPiecesCount] = useState(null)
-    const [objetsCount, setObjetsCount] = useState(null)
-    const [recentItems, setRecentItems] = useState([])
-
-    useEffect(() => {
-        let cancelled = false
-
-        Promise.all([
-            fetchJson('/api/info/pieces').catch(() => []),
-            fetchJson('/api/info/objets').catch(() => [])
-        ])
-            .then(([pieces, objets]) => {
-                if (cancelled) return
-                const safePieces = Array.isArray(pieces) ? pieces : []
-                const safeObjets = Array.isArray(objets) ? objets : []
-                setPiecesCount(safePieces.length)
-                setObjetsCount(safeObjets.length)
-                setRecentItems(safeObjets.slice(0, 4))
-            })
-            .catch(() => {
-                if (cancelled) return
-                setPiecesCount(0)
-                setObjetsCount(0)
-                setRecentItems([])
-            })
-
-        return () => {
-            cancelled = true
-        }
-    }, [])
-
-    return (
-        <section className="stack">
-            <article className="card hero">
-                <h2>Visite publique de la maison</h2>
-                <p>
-                    Cette version expose les données de la maison intelligente (pièces + objets connectés)
-                    et active un module Visualisation avec authentification, profil et gamification.
-                </p>
-                <ul>
-                    <li>✅ Module Information terminé (P1)</li>
-                    <li>✅ Module Visualisation terminé (auth, profil, points/niveaux)</li>
-                    <li>✅ Module Gestion terminé (CRUD + stats + historique)</li>
-                    <li>✅ Profils de démo disponibles (Parent/Enfant/Voisin)</li>
-                </ul>
-                {sessionUser && (
-                    <p className="ok" role="status">
-                        Connecté: {sessionUser.prenom} {sessionUser.nom} · Niveau {formatNiveauLabel(sessionUser.niveau)} ·{' '}
-                        {Math.floor(sessionUser.points ?? 0)} pts
-                    </p>
-                )}
-            </article>
-
-            <article className="card">
-                <h3>État du backend</h3>
-                {health.state === 'loading' && <p>Chargement...</p>}
-                {health.state === 'ok' && (
-                    <div>
-                        <p className="ok" role="status">Backend OK</p>
-                        <pre>{JSON.stringify(health.data, null, 2)}</pre>
-                    </div>
-                )}
-                {health.state === 'error' && (
-                    <p className="error" role="alert">Backend injoignable : {health.message}</p>
-                )}
-            </article>
-
-            <div className="kpi-grid">
-                <article className="card kpi">
-                    <span>Pièces</span>
-                    <strong>{piecesCount ?? '...'}</strong>
-                </article>
-                <article className="card kpi">
-                    <span>Objets connectés</span>
-                    <strong>{objetsCount ?? '...'}</strong>
-                </article>
-                <article className="card kpi">
-                    <span>Modules</span>
-                    <strong>3</strong>
-                </article>
-                <article className="card kpi">
-                    <span>État</span>
-                    <strong>{health.state === 'ok' ? 'Online' : '...'}</strong>
-                </article>
+/* ─── DETAIL DRAWER ─────────────────────────── */
+function DetailDrawer({ obj, onClose }) {
+  if (!obj) return null;
+  const methodes = obj.branche === 'Ouvrant' ? ['ouvrir()','fermer()','setPosition()'] :
+                   obj.branche === 'Capteur' ? ['lire()','alerter()',obj.type==='Thermostat' && 'setTemperature()'].filter(Boolean) :
+                   obj.branche === 'Appareil' ? ['demarrer()','arreter()'] :
+                   obj.branche === 'BesoinAnimal' ? ['verifierNiveau()',obj.type==='Eau'?'remplir()':'distribuer()'] : ['activer()','desactiver()'];
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:200, backdropFilter:'blur(4px)', animation:'rise .2s' }}/>
+      <aside className="slideR" style={{
+        position:'fixed', top:16, right:16, bottom:16, width:460, zIndex:201,
+        background:'var(--surface)', border:'1px solid var(--line-2)', borderRadius:18,
+        display:'flex', flexDirection:'column', overflow:'hidden',
+        boxShadow:'0 24px 80px rgba(0,0,0,.5)',
+      }}>
+        <header style={{ padding:'24px 24px 20px', borderBottom:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+          <div style={{ display:'flex', gap:14, alignItems:'flex-start' }}>
+            <div style={{ width:52, height:52, borderRadius:14, background:'var(--accent-soft)', color:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <Icon name={ICONS[obj.type] || 'grid'} size={26}/>
             </div>
+            <div>
+              <div className="label" style={{ color:'var(--accent)', marginBottom:4 }}>{obj.branche} · {obj.type}</div>
+              <h2 className="display" style={{ fontSize:24, lineHeight:1.1, marginBottom:4 }}>{obj.nom}</h2>
+              <div className="mono" style={{ fontSize:11, color:'var(--text-3)' }}>{obj.code} · {obj.marque}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={iconBtn}><Icon name="close" size={14}/></button>
+        </header>
 
-            <article className="card">
-                <h3>Objets récents (inspiration v4)</h3>
-                <div className="results-grid">
-                    {recentItems.map((item) => (
-                        <article
-                            key={item.id}
-                            className="result-card clickable"
-                            onClick={() => onOpenDetail?.(item)}
-                        >
-                            <header>
-                                <strong>{item.nom}</strong>
-                                <span className="badge">{item.type}</span>
-                            </header>
-                            <p>{item.marque || 'Marque inconnue'} · {item.pieceNom}</p>
-                            <p>
-                                Service: <strong>{item.service}</strong> · État: <strong>{item.etat}</strong>
-                            </p>
-                        </article>
-                    ))}
+        <div style={{ flex:1, overflowY:'auto', padding:'20px 24px', display:'flex', flexDirection:'column', gap:24 }}>
+          <div>
+            <div className="label" style={{ marginBottom:10 }}>Lecture en direct</div>
+            <div style={{
+              padding:'24px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)',
+              display:'flex', flexDirection:'column', alignItems:'center', gap:8,
+            }}>
+              <div className="display" style={{ fontSize:48, color: obj.etat==='ACTIF' ? 'var(--accent)' : 'var(--text-3)', lineHeight:1 }}>{obj.valeur}</div>
+              <div className="label" style={{ color:'var(--text-3)' }}>{obj.pieceNom} · {obj.connectivite}</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="label" style={{ marginBottom:10 }}>Attributs</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              {Object.entries(obj).filter(([k,v]) => v != null && !['id','code','nom','branche','marque','valeur','pieceNom','connectivite'].includes(k)).map(([k,v]) => (
+                <div key={k} style={{ padding:'10px 12px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
+                  <div className="label" style={{ fontSize:9, marginBottom:3 }}>{k}</div>
+                  <div className="display" style={{ fontSize:15, color:'var(--text)' }}>{String(v)}</div>
                 </div>
-            </article>
-        </section>
-    )
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="label" style={{ marginBottom:10 }}>Méthodes UML</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+              {methodes.map(m => (
+                <button key={m} className="mono" style={{
+                  padding:'8px 12px', fontSize:12, borderRadius:8,
+                  background:'var(--bg-3)', color:'var(--text-2)', border:'1px solid var(--line-2)',
+                }}>{m}</button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="label" style={{ marginBottom:10 }}>Activité (24h)</div>
+            <div style={{ borderRadius:12, background:'var(--bg-2)', border:'1px solid var(--line)', padding:'14px 16px' }}>
+              {[
+                { t:'14:17', txt: obj.type === 'Thermostat' ? '21.4°C · cible 22°C' : 'Lecture OK' },
+                { t:'13:02', txt: obj.batterie != null ? `Batterie ${obj.batterie}%` : 'Cycle terminé' },
+                { t:'09:55', txt:`Dernière action — ${obj.etat}` },
+              ].map((l,i) => (
+                <div key={i} style={{ display:'flex', gap:14, padding:'8px 0', fontSize:12, borderBottom: i<2 ? '1px solid var(--line)' : 'none' }}>
+                  <span className="mono" style={{ color:'var(--text-4)', minWidth:40 }}>{l.t}</span>
+                  <span style={{ color:'var(--text-2)' }}>{l.txt}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
 }
 
-function SearchPage({ onOpenDetail }) {
-    const [pieces, setPieces] = useState([])
-    const [items, setItems] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState('')
-
-    const [type, setType] = useState('')
-    const [pieceId, setPieceId] = useState('')
-    const [searchInput, setSearchInput] = useState('')
-    const [query, setQuery] = useState('')
-
-    useEffect(() => {
-        const timer = setTimeout(() => setQuery(searchInput.trim()), 300)
-        return () => clearTimeout(timer)
-    }, [searchInput])
-
-    useEffect(() => {
-        fetchJson('/api/info/pieces')
-            .then((data) => setPieces(Array.isArray(data) ? data : []))
-            .catch(() => setPieces([]))
-    }, [])
-
-    useEffect(() => {
-        setLoading(true)
-        setError('')
-
-        const params = new URLSearchParams()
-        if (type) params.set('type', type)
-        if (pieceId) params.set('pieceId', pieceId)
-        if (query) params.set('q', query)
-
-        const url = params.toString() ? `/api/info/objets?${params}` : '/api/info/objets'
-
-        fetchJson(url)
-            .then((data) => setItems(Array.isArray(data) ? data : []))
-            .catch((err) => {
-                setItems([])
-                setError(`Impossible de charger les objets (${err.message})`)
-            })
-            .finally(() => setLoading(false))
-    }, [type, pieceId, query])
-
-    const subtitle = useMemo(() => {
-        const chunks = []
-        if (type) chunks.push(`type: ${type}`)
-        if (pieceId) {
-            const p = pieces.find((x) => String(x.id) === String(pieceId))
-            chunks.push(`pièce: ${p?.nom ?? pieceId}`)
-        }
-        if (query) chunks.push(`recherche: "${query}"`)
-        return chunks.length ? chunks.join(' · ') : 'Aucun filtre (liste complète)'
-    }, [type, pieceId, pieces, query])
-
-    return (
-        <section className="stack">
-            <article className="card">
-                <h2>Recherche d&apos;objets connectés (public)</h2>
-                <p>Filtres combinables : type, pièce, recherche texte (debounce 300ms).</p>
-
-                <div className="filters">
-                    <label>
-                        Type
-                        <select value={type} onChange={(e) => setType(e.target.value)}>
-                            {TYPE_OPTIONS.map((opt) => (
-                                <option key={opt || 'all'} value={opt}>
-                                    {opt || 'Tous'}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label>
-                        Pièce
-                        <select value={pieceId} onChange={(e) => setPieceId(e.target.value)}>
-                            <option value="">Toutes</option>
-                            {pieces.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.nom}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label>
-                        Recherche
-                        <input
-                            type="text"
-                            placeholder="Nom, marque, type..."
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                        />
-                    </label>
+/* ─── HOUSE MAP ───────────────────────────── */
+function HouseMap({ items, t }) {
+  const counts = {};
+  PIECES.forEach(p => { counts[p.nom] = items.filter(o=>o.pieceNom===p.nom && o.etat==='ACTIF').length; });
+  return (
+    <div style={{
+      borderRadius:18, background:'var(--surface)', border:'1px solid var(--line)',
+      padding:'24px', position:'relative', overflow:'hidden',
+    }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+        <div>
+          <div className="label" style={{ marginBottom:6 }}>Carte de la maison</div>
+          <h3 className="display" style={{ fontSize:22 }}>Vue d'ensemble</h3>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:'var(--text-3)' }}>
+          <span className="num display" style={{ fontSize:32, color:'var(--accent)', lineHeight:1 }}>{Object.values(counts).reduce((a,b)=>a+b,0)}</span>
+          <span style={{ lineHeight:1.3 }}>objets<br/>actifs</span>
+        </div>
+      </div>
+      <div style={{
+        display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gridTemplateRows:'1fr 0.8fr',
+        gap:8, height:280, position:'relative',
+      }}>
+        {[
+          { nom:'Salon', col:'1 / 2', row:'1 / 3' },
+          { nom:'Cuisine', col:'2 / 3', row:'1 / 2' },
+          { nom:'Chambre', col:'3 / 4', row:'1 / 2' },
+          { nom:'Salle de bain', col:'2 / 3', row:'2 / 3' },
+          { nom:'Garage', col:'3 / 4', row:'2 / 3' },
+        ].map(p => {
+          const room = PIECES.find(r => r.nom === p.nom);
+          const c = counts[p.nom] || 0;
+          const intensity = c / 4;
+          return (
+            <div key={p.nom} style={{
+              gridColumn: p.col, gridRow: p.row,
+              borderRadius:12, padding:'14px 16px',
+              background: c > 0 ? `linear-gradient(135deg, rgba(255,181,71,${intensity*0.3}), var(--bg-2))` : 'var(--bg-2)',
+              border: '1px solid var(--line)',
+              display:'flex', flexDirection:'column', justifyContent:'space-between',
+              position:'relative', overflow:'hidden',
+            }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                <span style={{ fontSize:22 }}>{room.icon}</span>
+                {c > 0 && <span style={{ width:8, height:8, borderRadius:'50%', background:'var(--accent)', boxShadow:`0 0 8px var(--accent)` }}/>}
+              </div>
+              <div>
+                <div className="display" style={{ fontSize:15, color:'var(--text)' }}>{p.nom}</div>
+                <div className="mono" style={{ fontSize:11, color:'var(--text-3)', marginTop:2 }}>
+                  <span className="num" style={{ color: c>0 ? 'var(--accent)' : 'var(--text-3)' }}>{c}</span> actif{c!==1?'s':''} · {room.surface}m²
                 </div>
-
-                <small>{subtitle}</small>
-            </article>
-
-            <ResultsCard
-                loading={loading}
-                error={error}
-                items={items}
-                onOpenDetail={onOpenDetail}
-            />
-        </section>
-    )
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
-function VisualisationPage({ sessionUser, sessionReady, onSessionRefresh, onOpenDetail }) {
-    if (!sessionReady) {
-        return (
-            <section className="card">
-                <h2>Visualisation</h2>
-                <p>Chargement de la session...</p>
-            </section>
-        )
-    }
+/* ─── HOME ─────────────────────────────────── */
+function HomePage({ user, items, t, openDetail }) {
+  const actifs = items.filter(o => o.etat==='ACTIF').length;
+  const lowBat = items.filter(o => o.batterie!=null && o.batterie<20);
+  const consumption = items.filter(o => o.etat==='ACTIF' && o.branche === 'Appareil').length * 1.2;
+  const hour = new Date().getHours();
+  const greeting = hour<12 ? 'Bonjour' : hour<18 ? 'Bon après-midi' : 'Bonsoir';
 
-    if (!sessionUser) {
-        return <AuthPanel onSessionRefresh={onSessionRefresh} />
-    }
+  return (
+    <div className="rise">
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:32, gap:32 }}>
+        <div>
+          <div className="label" style={{ marginBottom:10, color: t.accent }}>{new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</div>
+          <h1 className="display" style={{ fontSize:56, lineHeight:1, letterSpacing:'-0.03em' }}>
+            {greeting}, <span className="display-i" style={{ color: t.accent }}>{user?.prenom || 'visiteur'}</span>.
+          </h1>
+          <p style={{ fontSize:16, color:'var(--text-2)', marginTop:14, maxWidth:580 }}>
+            {actifs} objet{actifs>1?'s':''} en service dans la maison <span style={{color:'var(--text)'}}>{t.houseName}</span>.{' '}
+            {lowBat.length > 0 && <span style={{color:'var(--accent)'}}>{lowBat.length} batterie{lowBat.length>1?'s':''} faible{lowBat.length>1?'s':''}.</span>}
+          </p>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button style={ctaSec}><Icon name="bell" size={14}/> Alertes</button>
+          <button style={{...ctaPri, background: t.accent}}><Icon name="plus" size={14}/> Nouvel objet</button>
+        </div>
+      </div>
 
-    return (
-        <VisualisationDashboard
-            sessionUser={sessionUser}
-            onSessionRefresh={onSessionRefresh}
-            onOpenDetail={onOpenDetail}
+      {/* KPI ROW */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
+        {[
+          { label:'Objets total', val:items.length, sub:'enregistrés', color: 'var(--text)', icon:'grid' },
+          { label:'En service', val:actifs, sub:`${Math.round(actifs/items.length*100)}% actifs`, color: 'var(--green)', icon:'power' },
+          { label:'Conso estimée', val:`${consumption.toFixed(1)}`, sub:'kWh / heure', color: t.accent, icon:'bolt', unit:'' },
+          { label:'Alertes', val:lowBat.length, sub: lowBat.length>0 ? 'à recharger' : 'tout va bien', color: lowBat.length > 0 ? 'var(--red)' : 'var(--text-2)', icon:'bell' },
+        ].map(k => (
+          <div key={k.label} style={{ borderRadius:14, padding:'18px 20px', background:'var(--surface)', border:'1px solid var(--line)' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+              <span className="label">{k.label}</span>
+              <span style={{ color: k.color, opacity:.7 }}><Icon name={k.icon} size={14}/></span>
+            </div>
+            <div className="display num" style={{ fontSize:36, lineHeight:1, color: k.color }}>{k.val}</div>
+            <div style={{ fontSize:11, color:'var(--text-3)', marginTop:6 }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1.3fr 1fr', gap:16, marginBottom:32 }}>
+        <HouseMap items={items} t={t}/>
+        <div style={{ borderRadius:18, background:'var(--surface)', border:'1px solid var(--line)', padding:24, display:'flex', flexDirection:'column' }}>
+          <div className="label" style={{ marginBottom:6 }}>Modules</div>
+          <h3 className="display" style={{ fontSize:22, marginBottom:16 }}>Trois espaces</h3>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, flex:1 }}>
+            {[
+              { n:'I', t:'Information', d:'Vitrine publique · index des objets', s:'P1', c:'var(--blue)' },
+              { n:'II', t:'Visualisation', d:'Espace privé · profil · services', s:'P2', c: t.accent },
+              { n:'III', t:'Gestion', d:'CRUD · statistiques · journal', s:'P3', c:'var(--purple)' },
+            ].map(m => (
+              <div key={m.t} style={{ padding:'14px 16px', borderRadius:12, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', alignItems:'center', gap:14 }}>
+                <div className="display num" style={{ fontSize:24, color: m.c, minWidth:32 }}>{m.n}</div>
+                <div style={{ flex:1 }}>
+                  <div className="display" style={{ fontSize:15 }}>{m.t}</div>
+                  <div style={{ fontSize:11, color:'var(--text-3)' }}>{m.d}</div>
+                </div>
+                <span className="mono" style={{ fontSize:10, color: m.c, padding:'3px 8px', borderRadius:99, border:`1px solid ${m.c}40` }}>{m.s}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14 }}>
+        <h3 className="display" style={{ fontSize:24 }}>Objets récents</h3>
+        <span className="label">Cliquez pour voir le détail</span>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12 }}>
+        {items.slice(0,4).map((o, i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)}/>)}
+      </div>
+    </div>
+  );
+}
+const ctaPri = { padding:'10px 18px', borderRadius:10, background:'var(--accent)', color:'#0e1116', display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:600 };
+const ctaSec = { padding:'10px 18px', borderRadius:10, background:'var(--surface)', color:'var(--text)', border:'1px solid var(--line-2)', display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:500 };
+
+/* ─── SEARCH ─────────────────────────────── */
+function SearchPage({ items, openDetail, t }) {
+  const [filters, setFilters] = useState({ branche:'', type:'', piece:'', q:'' });
+  const filtered = useMemo(() => items.filter(o => {
+    if (filters.branche && o.branche !== filters.branche) return false;
+    if (filters.type && o.type !== filters.type) return false;
+    if (filters.piece && o.pieceNom !== filters.piece) return false;
+    if (filters.q && !`${o.nom} ${o.marque} ${o.type}`.toLowerCase().includes(filters.q.toLowerCase())) return false;
+    return true;
+  }), [items, filters]);
+  const types = [...new Set(items.map(o => o.type))].sort();
+  const counts = {};
+  PIECES.forEach(p => counts[p.nom] = items.filter(o=>o.pieceNom===p.nom).length);
+
+  return (
+    <div className="rise">
+      <div style={{ marginBottom:28 }}>
+        <div className="label" style={{ marginBottom:8, color: t.accent }}>Module I · accès public</div>
+        <h1 className="display" style={{ fontSize:42, lineHeight:1.05 }}>Recherche d'<span className="display-i" style={{color: t.accent}}>objets connectés</span></h1>
+        <p style={{ fontSize:15, color:'var(--text-2)', marginTop:10, maxWidth:620 }}>Filtres combinables · index complet de la collection. Aucune authentification requise.</p>
+      </div>
+
+      <div style={{ position:'relative', marginBottom:20 }}>
+        <Icon name="search" size={18}/>
+        <input
+          placeholder="Rechercher par nom, type, marque…"
+          value={filters.q}
+          onChange={e=>setFilters({...filters, q:e.target.value})}
+          style={{
+            width:'100%', padding:'16px 20px 16px 50px', fontSize:15,
+            background:'var(--surface)', border:'1px solid var(--line)', borderRadius:14,
+            color:'var(--text)',
+          }}
         />
-    )
-}
-
-function AuthPanel({ onSessionRefresh }) {
-    const [registerForm, setRegisterForm] = useState({
-        prenom: '',
-        nom: '',
-        email: '',
-        motDePasse: '',
-        typeMembre: 'PARENT_FAMILLE'
-    })
-    const [loginForm, setLoginForm] = useState({ email: '', motDePasse: '' })
-    const [message, setMessage] = useState('')
-    const [error, setError] = useState('')
-
-    const submitRegister = async (e) => {
-        e.preventDefault()
-        setError('')
-        setMessage('')
-        try {
-            await fetchJson('/api/auth/register', {
-                method: 'POST',
-                body: JSON.stringify(registerForm)
-            })
-            setMessage('Compte créé et connecté ✅')
-            await onSessionRefresh()
-        } catch (err) {
-            setError(err.message)
-        }
-    }
-
-    const submitLogin = async (e) => {
-        e.preventDefault()
-        setError('')
-        setMessage('')
-        try {
-            await fetchJson('/api/auth/login', {
-                method: 'POST',
-                body: JSON.stringify(loginForm)
-            })
-            setMessage('Connexion réussie ✅')
-            await onSessionRefresh()
-        } catch (err) {
-            setError(err.message)
-        }
-    }
-
-    const loginDemo = async (demo) => {
-        setError('')
-        setMessage('')
-        setLoginForm({ email: demo.email, motDePasse: demo.motDePasse })
-        try {
-            await fetchJson('/api/auth/login', {
-                method: 'POST',
-                body: JSON.stringify({ email: demo.email, motDePasse: demo.motDePasse })
-            })
-            setMessage(`Connecté en démo : ${demo.role} ✅`)
-            await onSessionRefresh()
-        } catch (err) {
-            setError(`Connexion démo impossible (${demo.email}) : ${err.message}`)
-        }
-    }
-
-    return (
-        <section className="stack">
-            <article className="card">
-                <h2>Module Visualisation (auth requis)</h2>
-                <p>
-                    Crée un compte ou connecte-toi pour accéder au profil, consulter les services et
-                    accumuler des points selon les actions.
-                </p>
-                {message && <p className="ok" role="status">{message}</p>}
-                {error && <p className="error" role="alert">{error}</p>}
-            </article>
-
-            <div className="auth-grid auth-grid-3">
-                <article className="card demo-card">
-                    <h3>Profils de démo (comme v4)</h3>
-                    <p className="field-help">Mot de passe pour tous: <strong>demo1234</strong></p>
-                    <div className="demo-list">
-                        {DEMO_ACCOUNTS.map((demo) => (
-                            <button
-                                key={demo.key}
-                                type="button"
-                                className="demo-btn"
-                                onClick={() => loginDemo(demo)}
-                            >
-                                <span>{demo.role}</span>
-                                <small>{demo.email} · plafond {demo.niveauMax}</small>
-                            </button>
-                        ))}
-                    </div>
-                </article>
-
-                <article className="card">
-                    <h3>Créer un compte</h3>
-                    <form className="form-grid" onSubmit={submitRegister}>
-                        <label>
-                            Prénom
-                            <input
-                                required
-                                value={registerForm.prenom}
-                                onChange={(e) => setRegisterForm((f) => ({ ...f, prenom: e.target.value }))}
-                            />
-                        </label>
-                        <label>
-                            Nom
-                            <input
-                                required
-                                value={registerForm.nom}
-                                onChange={(e) => setRegisterForm((f) => ({ ...f, nom: e.target.value }))}
-                            />
-                        </label>
-                        <label>
-                            Email
-                            <input
-                                type="email"
-                                required
-                                value={registerForm.email}
-                                onChange={(e) => setRegisterForm((f) => ({ ...f, email: e.target.value }))}
-                            />
-                        </label>
-                        <label>
-                            Mot de passe
-                            <input
-                                type="password"
-                                required
-                                minLength={4}
-                                value={registerForm.motDePasse}
-                                onChange={(e) => setRegisterForm((f) => ({ ...f, motDePasse: e.target.value }))}
-                            />
-                        </label>
-                        <label>
-                            Type de membre
-                            <select
-                                value={registerForm.typeMembre}
-                                onChange={(e) =>
-                                    setRegisterForm((f) => ({ ...f, typeMembre: e.target.value }))
-                                }
-                            >
-                                <option value="PARENT_FAMILLE">ParentFamille (max Avancé)</option>
-                                <option value="ENFANT">Enfant (max Intermédiaire)</option>
-                                <option value="VOISIN_VISITEUR">VoisinVisiteur (max Débutant)</option>
-                            </select>
-                        </label>
-                        <button type="submit">Créer et se connecter</button>
-                    </form>
-                </article>
-
-                <article className="card">
-                    <h3>Se connecter</h3>
-                    <form className="form-grid" onSubmit={submitLogin}>
-                        <label>
-                            Email
-                            <input
-                                type="email"
-                                required
-                                value={loginForm.email}
-                                onChange={(e) => setLoginForm((f) => ({ ...f, email: e.target.value }))}
-                            />
-                        </label>
-                        <label>
-                            Mot de passe
-                            <input
-                                type="password"
-                                required
-                                value={loginForm.motDePasse}
-                                onChange={(e) => setLoginForm((f) => ({ ...f, motDePasse: e.target.value }))}
-                            />
-                        </label>
-                        <button type="submit">Connexion</button>
-                    </form>
-                </article>
-            </div>
-        </section>
-    )
-}
-
-function VisualisationDashboard({ sessionUser, onSessionRefresh, onOpenDetail }) {
-    const [profile, setProfile] = useState(sessionUser)
-    const [profileForm, setProfileForm] = useState({
-        pseudo: '',
-        bioPublique: '',
-        telephonePrive: '',
-        adressePrivee: ''
-    })
-
-    const [pieces, setPieces] = useState([])
-    const [services, setServices] = useState([])
-    const [items, setItems] = useState([])
-
-    const [type, setType] = useState('')
-    const [service, setService] = useState('')
-    const [etat, setEtat] = useState('')
-    const [pieceId, setPieceId] = useState('')
-    const [searchInput, setSearchInput] = useState('')
-    const [query, setQuery] = useState('')
-
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState('')
-    const [saveMsg, setSaveMsg] = useState('')
-
-    useEffect(() => {
-        const timer = setTimeout(() => setQuery(searchInput.trim()), 300)
-        return () => clearTimeout(timer)
-    }, [searchInput])
-
-    const refreshProfile = useCallback(async () => {
-        const data = await fetchJson('/api/visualisation/profile')
-        setProfile(data)
-        setProfileForm({
-            pseudo: data.pseudo ?? '',
-            bioPublique: data.bioPublique ?? '',
-            telephonePrive: data.telephonePrive ?? '',
-            adressePrivee: data.adressePrivee ?? ''
-        })
-        await onSessionRefresh()
-    }, [onSessionRefresh])
-
-    useEffect(() => {
-        refreshProfile().catch((err) => setError(err.message))
-
-        fetchJson('/api/info/pieces')
-            .then((data) => setPieces(Array.isArray(data) ? data : []))
-            .catch(() => setPieces([]))
-
-        fetchJson('/api/visualisation/services')
-            .then((data) => setServices(Array.isArray(data) ? data : []))
-            .catch(() => setServices([]))
-    }, [refreshProfile])
-
-    useEffect(() => {
-        setLoading(true)
-        setError('')
-
-        const params = new URLSearchParams()
-        if (type) params.set('type', type)
-        if (service) params.set('service', service)
-        if (etat) params.set('etat', etat)
-        if (pieceId) params.set('pieceId', pieceId)
-        if (query) params.set('q', query)
-
-        const url = params.toString() ? `/api/visualisation/objets?${params}` : '/api/visualisation/objets'
-
-        fetchJson(url)
-            .then(async (data) => {
-                setItems(Array.isArray(data) ? data : [])
-                await onSessionRefresh()
-            })
-            .catch((err) => {
-                setItems([])
-                setError(err.message)
-            })
-            .finally(() => setLoading(false))
-    }, [type, service, etat, pieceId, query, onSessionRefresh])
-
-    const saveProfile = async (e) => {
-        e.preventDefault()
-        setSaveMsg('')
-        try {
-            const data = await fetchJson('/api/visualisation/profile', {
-                method: 'PUT',
-                body: JSON.stringify(profileForm)
-            })
-            setProfile(data)
-            setSaveMsg('Profil mis à jour ✅ (+5 points)')
-            await onSessionRefresh()
-        } catch (err) {
-            setSaveMsg(`Erreur: ${err.message}`)
-        }
-    }
-
-    const logout = async () => {
-        await fetchJson('/api/auth/logout', { method: 'POST' })
-        await onSessionRefresh()
-    }
-
-    const points = Number(profile?.points ?? sessionUser?.points ?? 0)
-    const levelMeta = niveauMeta(profile?.niveau ?? sessionUser?.niveau)
-    const nextMeta = nextNiveauMeta(profile?.niveau ?? sessionUser?.niveau)
-    const progressPct = nextMeta
-        ? Math.max(
-              0,
-              Math.min(100, Math.round(((points - levelMeta.min) / (nextMeta.min - levelMeta.min)) * 100))
-          )
-        : 100
-
-    return (
-        <section className="stack">
-            <article className="card profile-hero">
-                <div className="row-between">
-                    <div>
-                        <h2>Visualisation privée</h2>
-                        <p>
-                            Bienvenue {profile?.prenom} {profile?.nom}.
-                        </p>
-                        <div className="chips" style={{ marginTop: 8 }}>
-                            <span className="chip">{formatTypeMembreLabel(profile?.typeMembre)}</span>
-                            <span className="chip">Plafond: {formatNiveauLabel(profile?.niveauMax)}</span>
-                            <span className="chip">Connexions: {profile?.nbConnexions ?? '-'}</span>
-                        </div>
-                    </div>
-                    <button type="button" onClick={logout}>Se déconnecter</button>
-                </div>
-
-                <div className="kpi-grid">
-                    <article className="card kpi">
-                        <span>Niveau</span>
-                        <strong>{formatNiveauLabel(profile?.niveau ?? sessionUser.niveau)}</strong>
-                    </article>
-                    <article className="card kpi">
-                        <span>Points</span>
-                        <strong>{Math.floor(points)}</strong>
-                    </article>
-                </div>
-
-                <div className="progress-wrap" aria-label="Progression niveau">
-                    <div className="progress-label">
-                        <span>Progression</span>
-                        <span>
-                            {nextMeta
-                                ? `${Math.floor(points)} / ${nextMeta.min} pts → ${nextMeta.label}`
-                                : 'Niveau max atteint'}
-                        </span>
-                    </div>
-                    <div className="progress-track">
-                        <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-                    </div>
-                </div>
-            </article>
-
-            <article className="card">
-                <h3>Profil (public / privé)</h3>
-                <form className="form-grid" onSubmit={saveProfile}>
-                    <label>
-                        Pseudo (public)
-                        <input
-                            value={profileForm.pseudo}
-                            onChange={(e) => setProfileForm((f) => ({ ...f, pseudo: e.target.value }))}
-                        />
-                    </label>
-                    <label>
-                        Bio (publique)
-                        <textarea
-                            rows={3}
-                            value={profileForm.bioPublique}
-                            onChange={(e) => setProfileForm((f) => ({ ...f, bioPublique: e.target.value }))}
-                        />
-                    </label>
-                    <label>
-                        Téléphone (privé)
-                        <input
-                            value={profileForm.telephonePrive}
-                            onChange={(e) =>
-                                setProfileForm((f) => ({ ...f, telephonePrive: e.target.value }))
-                            }
-                        />
-                    </label>
-                    <label>
-                        Adresse (privée)
-                        <input
-                            value={profileForm.adressePrivee}
-                            onChange={(e) =>
-                                setProfileForm((f) => ({ ...f, adressePrivee: e.target.value }))
-                            }
-                        />
-                    </label>
-                    <button type="submit">Enregistrer profil</button>
-                </form>
-                {saveMsg && (
-                    <p
-                        className={saveMsg.startsWith('Erreur') ? 'error' : 'ok'}
-                        role={saveMsg.startsWith('Erreur') ? 'alert' : 'status'}
-                    >
-                        {saveMsg}
-                    </p>
-                )}
-            </article>
-
-            <article className="card">
-                <h3>Services disponibles</h3>
-                <div className="chips">
-                    {services.map((s) => (
-                        <span key={s.code} className="chip">
-                            {s.label}: {s.objets}
-                        </span>
-                    ))}
-                </div>
-            </article>
-
-            <article className="card">
-                <h3>Recherche objets (privée)</h3>
-                <p>Filtres combinables: service, type, état, pièce, texte.</p>
-
-                <div className="filters">
-                    <label>
-                        Service
-                        <select value={service} onChange={(e) => setService(e.target.value)}>
-                            {SERVICE_OPTIONS.map((opt) => (
-                                <option key={opt || 'all'} value={opt}>
-                                    {opt || 'Tous'}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label>
-                        Type
-                        <select value={type} onChange={(e) => setType(e.target.value)}>
-                            {TYPE_OPTIONS.map((opt) => (
-                                <option key={opt || 'all'} value={opt}>
-                                    {opt || 'Tous'}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label>
-                        État
-                        <select value={etat} onChange={(e) => setEtat(e.target.value)}>
-                            {ETAT_OPTIONS.map((opt) => (
-                                <option key={opt || 'all'} value={opt}>
-                                    {opt || 'Tous'}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label>
-                        Pièce
-                        <select value={pieceId} onChange={(e) => setPieceId(e.target.value)}>
-                            <option value="">Toutes</option>
-                            {pieces.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.nom}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label>
-                        Recherche
-                        <input
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            placeholder="Nom, marque, service..."
-                        />
-                    </label>
-                </div>
-            </article>
-
-            <ResultsCard
-                loading={loading}
-                error={error}
-                items={items}
-                onOpenDetail={onOpenDetail}
-            />
-        </section>
-    )
-}
-
-function GestionPage({ sessionUser, sessionReady, onSessionRefresh, onOpenDetail }) {
-    const [pieces, setPieces] = useState([])
-    const [items, setItems] = useState([])
-    const [stats, setStats] = useState(null)
-    const [history, setHistory] = useState([])
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState('')
-    const [message, setMessage] = useState('')
-    const [accessDenied, setAccessDenied] = useState(false)
-    const [editingId, setEditingId] = useState(null)
-    const [form, setForm] = useState(initialGestionForm())
-
-    const loadGestionData = useCallback(async () => {
-        setLoading(true)
-        setError('')
-        setAccessDenied(false)
-        try {
-            const [piecesData, objetsData, statsData, historyData] = await Promise.all([
-                fetchJson('/api/info/pieces'),
-                fetchJson('/api/gestion/objets'),
-                fetchJson('/api/gestion/stats'),
-                fetchJson('/api/gestion/historique?limit=20')
-            ])
-            setPieces(Array.isArray(piecesData) ? piecesData : [])
-            setItems(Array.isArray(objetsData) ? objetsData : [])
-            setStats(statsData)
-            setHistory(Array.isArray(historyData) ? historyData : [])
-            await onSessionRefresh()
-        } catch (err) {
-            if (err?.status === 403) {
-                setAccessDenied(true)
-                setError('')
-            } else {
-                setError(err.message)
-            }
-        } finally {
-            setLoading(false)
-        }
-    }, [onSessionRefresh])
-
-    useEffect(() => {
-        if (sessionUser) {
-            loadGestionData()
-        }
-    }, [sessionUser, loadGestionData])
-
-    if (!sessionReady) {
-        return (
-            <section className="card">
-                <h2>Gestion</h2>
-                <p>Chargement de la session...</p>
-            </section>
-        )
-    }
-
-    if (!sessionUser) {
-        return (
-            <section className="card">
-                <h2>Gestion (auth requise)</h2>
-                <p>Connecte-toi sur l'onglet Visualisation pour accéder au CRUD objets.</p>
-            </section>
-        )
-    }
-
-    if (accessDenied) {
-        return (
-            <section className="card">
-                <h2>Accès Gestion refusé</h2>
-                <p>
-                    Le module Gestion exige un compte <strong>ParentFamille</strong> avec plafond
-                    <strong> Avancé</strong>.
-                </p>
-                <ul>
-                    <li>VoisinVisiteur → Débutant</li>
-                    <li>Enfant → Intermédiaire</li>
-                    <li>ParentFamille → Avancé</li>
-                </ul>
-                <p className="field-help">
-                    Utilise un compte démo ParentFamille (<code>parent@demo.local</code> / <code>demo1234</code>)
-                    depuis l'onglet Visualisation.
-                </p>
-            </section>
-        )
-    }
-
-    const submitGestionForm = async (e) => {
-        e.preventDefault()
-        setMessage('')
-        setError('')
-
-        try {
-            const payload = gestionPayloadFromForm(form)
-            if (editingId) {
-                await fetchJson(`/api/gestion/objets/${editingId}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(payload)
-                })
-                setMessage('Objet mis à jour ✅')
-            } else {
-                await fetchJson('/api/gestion/objets', {
-                    method: 'POST',
-                    body: JSON.stringify(payload)
-                })
-                setMessage('Objet créé ✅')
-            }
-            setEditingId(null)
-            setForm(initialGestionForm())
-            await loadGestionData()
-        } catch (err) {
-            setError(err.message)
-        }
-    }
-
-    const startEdit = async (id) => {
-        setError('')
-        setMessage('')
-        try {
-            const detail = await fetchJson(`/api/gestion/objets/${id}`)
-            setEditingId(id)
-            setForm(formFromDetail(detail))
-        } catch (err) {
-            setError(err.message)
-        }
-    }
-
-    const toggleEtat = async (item) => {
-        setError('')
-        try {
-            await fetchJson(`/api/gestion/objets/${item.id}/etat`, {
-                method: 'PATCH',
-                body: JSON.stringify({ actif: item.etat !== 'ACTIF' })
-            })
-            await loadGestionData()
-        } catch (err) {
-            setError(err.message)
-        }
-    }
-
-    const deleteItem = async (id) => {
-        setError('')
-        setMessage('')
-        try {
-            await fetchJson(`/api/gestion/objets/${id}`, { method: 'DELETE' })
-            if (editingId === id) {
-                setEditingId(null)
-                setForm(initialGestionForm())
-            }
-            setMessage('Objet supprimé ✅')
-            await loadGestionData()
-        } catch (err) {
-            setError(err.message)
-        }
-    }
-
-    return (
-        <section className="stack">
-            <article className="card">
-                <h2>Gestion des objets connectés</h2>
-                <p>CRUD complet, association pièce, activation/désactivation, statistiques et historique.</p>
-                {message && <p className="ok" role="status">{message}</p>}
-                {error && <p className="error" role="alert">{error}</p>}
-            </article>
-
-            {stats && (
-                <div className="kpi-grid">
-                    <article className="card kpi">
-                        <span>Total objets</span>
-                        <strong>{stats.totalObjets}</strong>
-                    </article>
-                    <article className="card kpi">
-                        <span>Actifs</span>
-                        <strong>{stats.actifs}</strong>
-                    </article>
-                    <article className="card kpi">
-                        <span>Inactifs</span>
-                        <strong>{stats.inactifs}</strong>
-                    </article>
-                    <article className="card kpi">
-                        <span>Actions historisées</span>
-                        <strong>{stats.actionsHistorique}</strong>
-                    </article>
-                </div>
-            )}
-
-            <article className="card">
-                <div className="row-between">
-                    <h3>{editingId ? `Modifier objet #${editingId}` : 'Créer un objet'}</h3>
-                    {editingId && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEditingId(null)
-                                setForm(initialGestionForm())
-                            }}
-                        >
-                            Annuler édition
-                        </button>
-                    )}
-                </div>
-                <form className="form-grid" onSubmit={submitGestionForm}>
-                    <div className="filters">
-                        <label>
-                            Type
-                            <select
-                                value={form.type}
-                                disabled={Boolean(editingId)}
-                                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
-                            >
-                                {GESTION_TYPE_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt}>
-                                        {opt}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label>
-                            Nom
-                            <input
-                                required
-                                value={form.nom}
-                                onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-                            />
-                        </label>
-
-                        <label>
-                            Marque
-                            <input
-                                value={form.marque}
-                                onChange={(e) => setForm((f) => ({ ...f, marque: e.target.value }))}
-                            />
-                        </label>
-
-                        <label>
-                            Pièce
-                            <select
-                                required
-                                value={form.pieceId}
-                                onChange={(e) => setForm((f) => ({ ...f, pieceId: e.target.value }))}
-                            >
-                                <option value="">Choisir une pièce</option>
-                                {pieces.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.nom}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label>
-                            État
-                            <select
-                                value={form.etat}
-                                onChange={(e) => setForm((f) => ({ ...f, etat: e.target.value }))}
-                            >
-                                {ETAT_OPTIONS.filter(Boolean).map((opt) => (
-                                    <option key={opt} value={opt}>
-                                        {opt}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label>
-                            Connectivité
-                            <select
-                                value={form.connectivite}
-                                onChange={(e) => setForm((f) => ({ ...f, connectivite: e.target.value }))}
-                            >
-                                <option value="WIFI">WIFI</option>
-                                <option value="BLUETOOTH">BLUETOOTH</option>
-                            </select>
-                        </label>
-
-                        <label>
-                            Batterie (%)
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={form.batterie}
-                                onChange={(e) => setForm((f) => ({ ...f, batterie: e.target.value }))}
-                            />
-                        </label>
-
-                        {(form.type === 'Porte' || form.type === 'Volet') && (
-                            <label>
-                                Position
-                                <input
-                                    type="number"
-                                    value={form.position}
-                                    onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-                                />
-                            </label>
-                        )}
-
-                        {(form.type === 'Thermostat' || form.type === 'Camera') && (
-                            <label>
-                                Zone
-                                <input
-                                    value={form.zone}
-                                    onChange={(e) => setForm((f) => ({ ...f, zone: e.target.value }))}
-                                />
-                            </label>
-                        )}
-
-                        {(form.type === 'Television' || form.type === 'LaveLinge') && (
-                            <>
-                                <label>
-                                    Cycle
-                                    <input
-                                        value={form.cycle}
-                                        onChange={(e) => setForm((f) => ({ ...f, cycle: e.target.value }))}
-                                    />
-                                </label>
-                                <label>
-                                    Conso énergie
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={form.consoEnergie}
-                                        onChange={(e) =>
-                                            setForm((f) => ({ ...f, consoEnergie: e.target.value }))
-                                        }
-                                    />
-                                </label>
-                            </>
-                        )}
-
-                        {(form.type === 'Nourriture' || form.type === 'Eau') && (
-                            <>
-                                <label>
-                                    Niveau
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={form.niveau}
-                                        onChange={(e) => setForm((f) => ({ ...f, niveau: e.target.value }))}
-                                    />
-                                </label>
-                                <label>
-                                    Animal
-                                    <input
-                                        value={form.animal}
-                                        onChange={(e) => setForm((f) => ({ ...f, animal: e.target.value }))}
-                                    />
-                                </label>
-                            </>
-                        )}
-                    </div>
-
-                    <button type="submit">{editingId ? 'Sauvegarder modifications' : 'Créer objet'}</button>
-                </form>
-            </article>
-
-            <article className="card">
-                <h3>Objets existants ({items.length})</h3>
-                {loading && <p>Chargement...</p>}
-                <div className="results-grid">
-                    {items.map((item) => (
-                        <article
-                            key={item.id}
-                            className="result-card clickable"
-                            onClick={() => onOpenDetail?.(item)}
-                        >
-                            <header>
-                                <strong>{item.nom}</strong>
-                                <span className="badge">{item.type}</span>
-                            </header>
-                            <p>
-                                {item.marque || 'Marque inconnue'} · {item.pieceNom}
-                            </p>
-                            <p>
-                                Service: <strong>{item.service}</strong> · État: <strong>{item.etat}</strong>
-                            </p>
-                            <div className="inline-actions" onClick={(e) => e.stopPropagation()}>
-                                <button type="button" onClick={() => startEdit(item.id)}>
-                                    Modifier
-                                </button>
-                                <button type="button" onClick={() => toggleEtat(item)}>
-                                    {item.etat === 'ACTIF' ? 'Désactiver' : 'Activer'}
-                                </button>
-                                <button type="button" onClick={() => deleteItem(item.id)}>
-                                    Supprimer
-                                </button>
-                            </div>
-                        </article>
-                    ))}
-                </div>
-            </article>
-
-            {stats?.parPiece?.length > 0 && (
-                <article className="card">
-                    <h3>Répartition par pièce</h3>
-                    <div className="chips">
-                        {stats.parPiece.map((p) => (
-                            <span key={p.piece} className="chip">
-                                {p.piece}: {p.objets}
-                            </span>
-                        ))}
-                    </div>
-                </article>
-            )}
-
-            <article className="card">
-                <h3>Historique des actions</h3>
-                <div className="history-list">
-                    {history.map((h) => (
-                        <div key={h.id} className="history-item">
-                            <strong>{h.action}</strong> · {h.objetNom || 'objet'} ({h.typeObjet || 'n/a'})
-                            <small>
-                                {new Date(h.timestamp).toLocaleString()} · {h.utilisateurEmail || 'n/a'}
-                            </small>
-                            {h.details && <small>{h.details}</small>}
-                        </div>
-                    ))}
-                    {history.length === 0 && <p>Aucune action historisée.</p>}
-                </div>
-            </article>
-        </section>
-    )
-}
-
-function ResultsCard({ loading, error, items, onOpenDetail }) {
-    return (
-        <article className="card">
-            <h3>Résultats</h3>
-            {loading && <p>Chargement...</p>}
-            {error && <p className="error" role="alert">{error}</p>}
-
-            {!loading && !error && (
-                <>
-                    <p>{items.length} objet(s) trouvé(s)</p>
-                    <div className="results-grid">
-                        {items.map((item) => (
-                            <article
-                                key={item.id}
-                                className="result-card clickable"
-                                onClick={() => onOpenDetail?.(item)}
-                            >
-                                <header>
-                                    <strong>{item.nom}</strong>
-                                    <span className="badge">{item.type}</span>
-                                </header>
-                                <p>
-                                    {item.marque || 'Marque inconnue'} · {item.pieceNom}
-                                </p>
-                                <p>
-                                    Service: <strong>{item.service}</strong>
-                                </p>
-                                <p>
-                                    Branche: <strong>{item.branche}</strong> · État:{' '}
-                                    <strong>{item.etat}</strong>
-                                </p>
-                            </article>
-                        ))}
-                    </div>
-                </>
-            )}
-        </article>
-    )
-}
-
-function ObjectDetailModal({ item, onClose }) {
-    if (!item) return null
-
-    return (
-        <div className="modal-overlay" role="presentation" onClick={onClose}>
-            <aside
-                className="modal-card"
-                role="dialog"
-                aria-modal="true"
-                aria-label={`Détail ${item.nom}`}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="row-between">
-                    <h3>Détail objet</h3>
-                    <button type="button" onClick={onClose}>Fermer</button>
-                </div>
-                <h2>{item.nom}</h2>
-                <div className="chips">
-                    <span className="chip">{item.type}</span>
-                    <span className="chip">{item.service}</span>
-                    <span className="chip">{item.etat}</span>
-                </div>
-                <div className="stack" style={{ marginTop: 12 }}>
-                    <p><strong>Code:</strong> {item.code ?? 'n/a'}</p>
-                    <p><strong>Branche:</strong> {item.branche ?? 'n/a'}</p>
-                    <p><strong>Pièce:</strong> {item.pieceNom ?? 'n/a'}</p>
-                    <p><strong>Marque:</strong> {item.marque ?? 'n/a'}</p>
-                    <p><strong>Connectivité:</strong> {item.connectivite ?? 'n/a'}</p>
-                    <p><strong>Batterie:</strong> {item.batterie != null ? `${item.batterie}%` : 'n/a'}</p>
-                    <p><strong>Valeur:</strong> {item.valeur ?? 'n/a'}</p>
-                </div>
-            </aside>
+        <div style={{ position:'absolute', left:18, top:'50%', transform:'translateY(-50%)', color:'var(--text-3)' }}>
+          <Icon name="search" size={18}/>
         </div>
-    )
+      </div>
+
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
+        <RoomChip room={{nom:'Toutes', icon:'•'}} count={items.length} active={!filters.piece} onClick={()=>setFilters({...filters, piece:''})}/>
+        {PIECES.map(p => <RoomChip key={p.id} room={p} count={counts[p.nom]} active={filters.piece===p.nom} onClick={()=>setFilters({...filters, piece: filters.piece===p.nom?'':p.nom})}/>)}
+      </div>
+
+      <div style={{ display:'flex', gap:12, marginBottom:24, padding:'14px 16px', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:12, alignItems:'center' }}>
+        <span className="label">Filtres</span>
+        <select value={filters.branche} onChange={e=>setFilters({...filters, branche:e.target.value})} style={selectStyle}>
+          <option value="">Toutes branches</option>
+          {['Ouvrant','Capteur','Appareil','BesoinAnimal'].map(b => <option key={b}>{b}</option>)}
+        </select>
+        <select value={filters.type} onChange={e=>setFilters({...filters, type:e.target.value})} style={selectStyle}>
+          <option value="">Tous types</option>
+          {types.map(t => <option key={t}>{t}</option>)}
+        </select>
+        <div style={{ flex:1 }}/>
+        {(filters.branche || filters.type || filters.piece || filters.q) && (
+          <button onClick={()=>setFilters({branche:'', type:'', piece:'', q:''})} style={{ ...ctaSec, padding:'8px 14px', fontSize:12 }}>
+            Réinitialiser <Icon name="close" size={12}/>
+          </button>
+        )}
+        <span className="mono num" style={{ fontSize:13, color: t.accent }}>{filtered.length}</span>
+        <span style={{ fontSize:12, color:'var(--text-3)' }}>résultats</span>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'80px 20px', borderRadius:14, background:'var(--surface)', border:'1px solid var(--line)' }}>
+          <div className="display-i" style={{ fontSize:32, color:'var(--text-3)', marginBottom:8 }}>aucun résultat</div>
+          <div style={{ fontSize:13, color:'var(--text-4)' }}>Ajustez les filtres ou la requête</div>
+        </div>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12 }}>
+          {filtered.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)}/>)}
+        </div>
+      )}
+    </div>
+  );
+}
+const selectStyle = { padding:'8px 12px', background:'var(--bg-2)', color:'var(--text)', border:'1px solid var(--line)', borderRadius:8, fontSize:13, cursor:'pointer' };
+
+/* ─── LOGIN / VISUALISATION ─────────────── */
+function VisualisationPage({ user, setUser, items, addHistory, openDetail, t }) {
+  const [filters, setFilters] = useState({ service:'', etat:'', q:'' });
+
+  if (!user) {
+    return <LoginScreen setUser={setUser} addHistory={addHistory} t={t}/>;
+  }
+
+  const filtered = items.filter(o => {
+    if (filters.service && o.service !== filters.service) return false;
+    if (filters.etat && o.etat !== filters.etat) return false;
+    if (filters.q && !o.nom.toLowerCase().includes(filters.q.toLowerCase())) return false;
+    return true;
+  });
+
+  const currentNiv = NIVEAUX.find(n => n.code === user.niveau);
+  const nextNiv = NIVEAUX[NIVEAUX.findIndex(n => n.code === user.niveau) + 1];
+  const xpPct = nextNiv ? Math.min(100, Math.round((user.points - currentNiv.seuil) / (nextNiv.seuil - currentNiv.seuil) * 100)) : 100;
+  const services = ['Acces','Surveillance','Confort','Animal'];
+
+  return (
+    <div className="rise">
+      <div style={{ marginBottom:28 }}>
+        <div className="label" style={{ marginBottom:8, color: t.accent }}>Module II · espace privé</div>
+        <h1 className="display" style={{ fontSize:42, lineHeight:1.05 }}>Mon <span className="display-i" style={{color: t.accent}}>tableau de bord</span></h1>
+      </div>
+
+      {/* PROFILE */}
+      <div style={{
+        borderRadius:18, padding:'24px', marginBottom:24,
+        background:'linear-gradient(135deg, var(--surface-2), var(--surface))',
+        border:'1px solid var(--line-2)', position:'relative', overflow:'hidden',
+      }}>
+        <div style={{ position:'absolute', top:-50, right:-50, width:200, height:200, borderRadius:'50%', background:`radial-gradient(circle, ${t.accent}30, transparent 70%)`, pointerEvents:'none' }}/>
+        <div style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:24, alignItems:'center', position:'relative' }}>
+          <div style={{
+            width:72, height:72, borderRadius:18,
+            background:`linear-gradient(135deg, ${t.accent}, #ff8a47)`, color:'#0e1116',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontFamily:"'Fraunces', serif", fontSize:30, fontWeight:600,
+            boxShadow:`0 8px 32px ${t.accent}40`,
+          }}>{user.photo}</div>
+
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+              <h3 className="display" style={{ fontSize:24 }}>{user.prenom} {user.nom}</h3>
+              <span style={{
+                padding:'3px 10px', borderRadius:99, fontSize:11,
+                background: 'var(--accent-soft)', color: t.accent, fontWeight:600,
+              }}>{user.typeMembre}</span>
+            </div>
+            <div className="mono" style={{ fontSize:12, color:'var(--text-3)', marginBottom:8 }}>@{user.pseudo} · {user.email}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ flex:1, maxWidth:280, height:6, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+                <div style={{ height:'100%', width:`${xpPct}%`, background: t.accent, borderRadius:99, transition:'width .4s' }}/>
+              </div>
+              <span className="mono" style={{ fontSize:11, color:'var(--text-3)' }}>
+                {nextNiv ? `${user.points.toFixed(2)} / ${nextNiv.seuil} pts → ${nextNiv.code}` : 'Niveau max'}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ borderLeft:'1px solid var(--line-2)', paddingLeft:24, textAlign:'center' }}>
+            <div className="label" style={{ marginBottom:4 }}>Niveau</div>
+            <div className="display" style={{ fontSize:30, color: t.accent, lineHeight:1 }}>{user.niveau}</div>
+            <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:4 }}>plafond : {user.niveauMax}</div>
+          </div>
+          <div style={{ borderLeft:'1px solid var(--line-2)', paddingLeft:24, textAlign:'center' }}>
+            <div className="label" style={{ marginBottom:4 }}>Points</div>
+            <div className="display num" style={{ fontSize:30, lineHeight:1 }}>{Math.floor(user.points)}</div>
+            <button onClick={()=>setUser(null)} style={{ marginTop:6, fontSize:11, color:'var(--text-3)', padding:'4px 8px' }}>Déconnexion ↗</button>
+          </div>
+        </div>
+      </div>
+
+      {/* SERVICES */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
+        {services.map(s => {
+          const cnt = items.filter(o=>o.service===s).length;
+          return (
+            <div key={s} style={{ borderRadius:14, padding:'18px 20px', background:'var(--surface)', border:'1px solid var(--line)' }}>
+              <div className="label">{s}</div>
+              <div className="display num" style={{ fontSize:32, color: t.accent, lineHeight:1, marginTop:6 }}>{cnt}</div>
+              <div style={{ fontSize:11, color:'var(--text-3)', marginTop:4 }}>objets liés</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
+        <input
+          placeholder="Rechercher dans mes objets…"
+          value={filters.q}
+          onChange={e=>setFilters({...filters, q:e.target.value})}
+          style={{ flex:1, padding:'10px 14px', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:10, fontSize:14 }}
+        />
+        <select value={filters.service} onChange={e=>setFilters({...filters, service:e.target.value})} style={selectStyle}>
+          <option value="">Tous services</option>
+          {services.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select value={filters.etat} onChange={e=>setFilters({...filters, etat:e.target.value})} style={selectStyle}>
+          <option value="">Tous états</option>
+          <option>ACTIF</option><option>INACTIF</option>
+        </select>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12 }}>
+        {filtered.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)}/>)}
+      </div>
+    </div>
+  );
 }
 
-function formatNiveauLabel(value) {
-    if (!value) return 'Débutant'
-    return String(value)
-        .toUpperCase()
-        .replaceAll('_', ' ')
-        .replace('DEBUTANT', 'Débutant')
-        .replace('INTERMEDIAIRE', 'Intermédiaire')
-        .replace('AVANCE', 'Avancé')
+function LoginScreen({ setUser, addHistory, t }) {
+  const [tab, setTab] = useState('login');
+  return (
+    <div className="rise" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, minHeight:600 }}>
+      <div style={{
+        borderRadius:18, padding:'32px', position:'relative', overflow:'hidden',
+        background:`linear-gradient(135deg, ${t.accent}, #ff8a47)`,
+        color:'#0e1116', display:'flex', flexDirection:'column', justifyContent:'space-between',
+      }}>
+        <div>
+          <div style={{ fontSize:11, fontFamily:"'Geist Mono', monospace", textTransform:'uppercase', letterSpacing:'.08em', marginBottom:14, opacity:.7 }}>Module II</div>
+          <h2 className="display" style={{ fontSize:42, lineHeight:1, marginBottom:14 }}>Identifiez-vous pour accéder à <span className="display-i">votre maison</span>.</h2>
+          <p style={{ fontSize:14, opacity:.85, lineHeight:1.5 }}>Trois types de membres : ParentFamille, Enfant, VoisinVisiteur. Chaque type ouvre un niveau de droits différent.</p>
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:32 }}>
+          <div style={{ fontSize:11, fontFamily:"'Geist Mono', monospace", textTransform:'uppercase', letterSpacing:'.08em', opacity:.6, marginBottom:4 }}>Profils de démo</div>
+          {Object.entries(USERS).map(([k, u]) => (
+            <button key={k} onClick={()=>{ setUser(u); addHistory({ action:'CONNEXION', objetNom:'session', code:`@${u.pseudo}`, utilisateur:u.pseudo, details:'+0.25 pts' }); }}
+              style={{ padding:'12px 14px', background:'rgba(14,17,22,.85)', color:'#fff', borderRadius:10, display:'flex', alignItems:'center', gap:12, transition:'background .15s' }}
+              onMouseEnter={e=>e.currentTarget.style.background='rgba(14,17,22,1)'}
+              onMouseLeave={e=>e.currentTarget.style.background='rgba(14,17,22,.85)'}>
+              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:14, fontWeight:600 }}>{u.photo}</div>
+              <div style={{ flex:1, textAlign:'left' }}>
+                <div style={{ fontSize:13, fontWeight:600 }}>{u.prenom} · <span style={{ opacity:.6, fontWeight:400 }}>{u.typeMembre}</span></div>
+                <div style={{ fontSize:11, opacity:.5, fontFamily:"'Geist Mono', monospace" }}>niveauMax: {u.niveauMax} · {u.points}pts</div>
+              </div>
+              <Icon name="chevR" size={14}/>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ borderRadius:18, padding:'32px', background:'var(--surface)', border:'1px solid var(--line)' }}>
+        <div style={{ display:'flex', gap:4, padding:4, background:'var(--bg-2)', borderRadius:10, marginBottom:24 }}>
+          {['login','register'].map(k => (
+            <button key={k} onClick={()=>setTab(k)} style={{
+              flex:1, padding:'9px', borderRadius:8, fontSize:13, fontWeight:500,
+              background: tab===k ? 'var(--surface)' : 'transparent',
+              color: tab===k ? 'var(--text)' : 'var(--text-3)',
+              transition:'all .15s',
+            }}>{k==='login' ? 'Connexion' : 'Inscription'}</button>
+          ))}
+        </div>
+
+        {tab==='login' ? (
+          <form onSubmit={e=>{ e.preventDefault(); setUser(USERS.alice); addHistory({ action:'CONNEXION', objetNom:'session', code:'@ali_smart', utilisateur:'alice', details:'+0.25 pts' }); }}>
+            <h3 className="display" style={{ fontSize:26, marginBottom:24 }}>Heureux de vous revoir.</h3>
+            <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+              <Field label="Email">
+                <input type="email" defaultValue="alice@cytech.fr" style={inputStyle}/>
+              </Field>
+              <Field label="Mot de passe">
+                <input type="password" defaultValue="••••••••" style={inputStyle}/>
+              </Field>
+              <button type="submit" style={{ marginTop:12, padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600, display:'flex', justifyContent:'center', alignItems:'center', gap:8 }}>
+                Se connecter <Icon name="arrow" size={14}/>
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            <h3 className="display" style={{ fontSize:26, marginBottom:24 }}>Créer un compte.</h3>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+              <Field label="Prénom"><input style={inputStyle}/></Field>
+              <Field label="Nom"><input style={inputStyle}/></Field>
+              <div style={{ gridColumn:'span 2' }}><Field label="Email"><input type="email" style={inputStyle}/></Field></div>
+              <Field label="Pseudo"><input style={inputStyle}/></Field>
+              <Field label="Mot de passe"><input type="password" style={inputStyle}/></Field>
+              <div style={{ gridColumn:'span 2' }}><Field label="Type de membre">
+                <select style={inputStyle}>
+                  <option>ParentFamille — Avancé</option>
+                  <option>Enfant — Intermédiaire</option>
+                  <option>VoisinVisiteur — Débutant</option>
+                </select>
+              </Field></div>
+            </div>
+            <button style={{ marginTop:20, width:'100%', padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600 }}>Créer mon compte</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-function formatTypeMembreLabel(value) {
-    if (!value) return 'ParentFamille'
-    return String(value)
-        .toUpperCase()
-        .replaceAll('_', ' ')
-        .replace('PARENT FAMILLE', 'ParentFamille')
-        .replace('VOISIN VISITEUR', 'VoisinVisiteur')
-        .replace('ENFANT', 'Enfant')
+function Field({ label, children }) {
+  return (
+    <label style={{ display:'flex', flexDirection:'column', gap:6 }}>
+      <span className="label" style={{ fontSize:10 }}>{label}</span>
+      {children}
+    </label>
+  );
 }
+const inputStyle = {
+  padding:'12px 14px', background:'var(--bg-2)', border:'1px solid var(--line)', borderRadius:10,
+  fontSize:14, color:'var(--text)', width:'100%',
+};
 
-function niveauMeta(value) {
-    const order = [
-        { key: 'DEBUTANT', label: 'Débutant', min: 0 },
-        { key: 'INTERMEDIAIRE', label: 'Intermédiaire', min: 3 },
-        { key: 'AVANCE', label: 'Avancé', min: 10 }
-    ]
-    const key = String(value ?? 'DEBUTANT').toUpperCase()
-    return order.find((x) => x.key === key) ?? order[0]
-}
+/* ─── GESTION ──────────────────────────── */
+function GestionPage({ user, items, setItems, history, addHistory, t }) {
+  const [editing, setEditing] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [msg, setMsg] = useState('');
 
-function nextNiveauMeta(value) {
-    const order = [
-        { key: 'DEBUTANT', label: 'Débutant', min: 0 },
-        { key: 'INTERMEDIAIRE', label: 'Intermédiaire', min: 3 },
-        { key: 'AVANCE', label: 'Avancé', min: 10 }
-    ]
-    const key = String(value ?? 'DEBUTANT').toUpperCase()
-    const idx = order.findIndex((x) => x.key === key)
-    if (idx < 0 || idx >= order.length - 1) return null
-    return order[idx + 1]
-}
+  if (!user) {
+    return (
+      <div className="rise" style={{ padding:'80px 0', textAlign:'center', maxWidth:480, margin:'0 auto' }}>
+        <div style={{ width:64, height:64, borderRadius:18, background:'var(--accent-soft)', color: t.accent, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }}>
+          <Icon name="lock" size={28}/>
+        </div>
+        <h2 className="display" style={{ fontSize:28, marginBottom:10 }}>Connexion requise</h2>
+        <p style={{ fontSize:14, color:'var(--text-2)' }}>Le module Gestion est réservé aux comptes authentifiés (niveauMax = Avancé). Connectez-vous via l'onglet « Mes objets ».</p>
+      </div>
+    );
+  }
+  if (user.niveauMax !== 'Avancé') {
+    return (
+      <div className="rise" style={{ padding:'80px 0', textAlign:'center', maxWidth:520, margin:'0 auto' }}>
+        <div style={{ width:64, height:64, borderRadius:18, background:'var(--red-soft)', color:'var(--red)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }}>
+          <Icon name="lock" size={28}/>
+        </div>
+        <div className="label" style={{ color:'var(--red)', marginBottom:6 }}>Accès refusé</div>
+        <h2 className="display" style={{ fontSize:28, marginBottom:10 }}>Plafond <span className="display-i" style={{color:'var(--red)'}}>{user.niveauMax}</span> atteint</h2>
+        <p style={{ fontSize:14, color:'var(--text-2)', marginBottom:18 }}>Le module Gestion exige niveauMax = Avancé. Votre type de membre <strong>{user.typeMembre}</strong> est plafonné à {user.niveauMax}.</p>
+        <div style={{ padding:'16px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)', textAlign:'left', fontSize:12, color:'var(--text-3)' }}>
+          <div className="label" style={{ marginBottom:8 }}>Hiérarchie des plafonds</div>
+          VoisinVisiteur → Débutant<br/>Enfant → Intermédiaire<br/>ParentFamille → Avancé
+        </div>
+      </div>
+    );
+  }
 
-function initialGestionForm() {
-    return {
-        type: 'Porte',
-        nom: '',
-        marque: '',
-        pieceId: '',
-        etat: 'ACTIF',
-        connectivite: 'WIFI',
-        batterie: '',
-        position: '',
-        zone: '',
-        cycle: '',
-        consoEnergie: '',
-        niveau: '',
-        animal: ''
+  const stats = {
+    total: items.length,
+    actifs: items.filter(o=>o.etat==='ACTIF').length,
+    inactifs: items.filter(o=>o.etat==='INACTIF').length,
+    actions: history.length,
+  };
+  const parPiece = useMemo(() => {
+    const m = {};
+    items.forEach(o => m[o.pieceNom] = (m[o.pieceNom]||0)+1);
+    return Object.entries(m).map(([piece, count]) => ({ piece, count })).sort((a,b)=>b.count-a.count);
+  }, [items]);
+
+  const flash = (s) => { setMsg(s); setTimeout(()=>setMsg(''), 2500); };
+
+  const acts = {
+    edit: (o) => { setEditing(o); setShowForm(true); window.scrollTo({top:240, behavior:'smooth'}); },
+    toggle: (o) => {
+      const newEtat = o.etat==='ACTIF' ? 'INACTIF' : 'ACTIF';
+      setItems(p => p.map(x => x.id===o.id ? {...x, etat: newEtat} : x));
+      addHistory({ action: newEtat==='ACTIF'?'ACTIVATION':'DÉSACTIVATION', objetNom:o.nom, code:o.code, utilisateur:user.pseudo, details:`etat → ${newEtat}` });
+      flash(`${o.nom} → ${newEtat.toLowerCase()}`);
+    },
+    delete: (id) => {
+      const o = items.find(x=>x.id===id);
+      setItems(p => p.filter(x => x.id!==id));
+      addHistory({ action:'SUPPRESSION', objetNom:o.nom, code:o.code, utilisateur:user.pseudo, details:null });
+      flash('Objet supprimé.');
+    },
+  };
+
+  const submit = (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const obj = {
+      id: editing?.id ?? Date.now(),
+      code: editing?.code ?? `${f.get('type').slice(0,2).toUpperCase()}-${String(Math.floor(Math.random()*900)+100)}`,
+      nom: f.get('nom'), marque: f.get('marque'), type: f.get('type'), branche: f.get('branche'),
+      pieceNom: f.get('piece'), service: f.get('service'), etat: f.get('etat'),
+      connectivite: f.get('connectivite'),
+      batterie: f.get('batterie') ? Number(f.get('batterie')) : null,
+      valeur: f.get('valeur') || (f.get('etat')==='ACTIF'?'En service':'Off'),
+    };
+    if (editing) {
+      setItems(p => p.map(x => x.id===editing.id ? obj : x));
+      addHistory({ action:'MODIFICATION', objetNom:obj.nom, code:obj.code, utilisateur:user.pseudo, details:'champs mis à jour' });
+      flash('Objet mis à jour.');
+    } else {
+      setItems(p => [...p, obj]);
+      addHistory({ action:'CRÉATION', objetNom:obj.nom, code:obj.code, utilisateur:user.pseudo, details:null });
+      flash('Objet créé.');
     }
+    setShowForm(false); setEditing(null);
+  };
+
+  const fmtTime = (ts) => {
+    const d = ts ? new Date(ts) : new Date();
+    const diff = Date.now() - d.getTime();
+    if (diff < 60000) return 'à l\'instant';
+    if (diff < 3600000) return `il y a ${Math.floor(diff/60000)} min`;
+    if (diff < 86400000) return `il y a ${Math.floor(diff/3600000)} h`;
+    return d.toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
+  };
+
+  return (
+    <div className="rise">
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:24 }}>
+        <div>
+          <div className="label" style={{ marginBottom:8, color: t.accent }}>Module III · administration</div>
+          <h1 className="display" style={{ fontSize:42, lineHeight:1.05 }}>Gestion des <span className="display-i" style={{color: t.accent}}>objets connectés</span></h1>
+        </div>
+        <button onClick={()=>{ setEditing(null); setShowForm(!showForm); }} style={{...ctaPri, background: t.accent}}>
+          <Icon name="plus" size={14}/>{showForm && !editing ? 'Replier' : 'Nouvel objet'}
+        </button>
+      </div>
+
+      {msg && (
+        <div className="rise" style={{ borderRadius:10, padding:'10px 16px', marginBottom:16, fontSize:13, background:'var(--green-soft)', color:'var(--green)', border:'1px solid var(--green)40', display:'flex', alignItems:'center', gap:10 }}>
+          <Icon name="bell" size={14}/>{msg}
+        </div>
+      )}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
+        {[
+          { l:'Total', v:stats.total, c:'var(--text)', i:'grid' },
+          { l:'Actifs', v:stats.actifs, c:'var(--green)', i:'power' },
+          { l:'Inactifs', v:stats.inactifs, c:'var(--text-3)', i:'close' },
+          { l:'Actions', v:stats.actions, c: t.accent, i:'log' },
+        ].map(k => (
+          <div key={k.l} style={{ borderRadius:14, padding:'18px 20px', background:'var(--surface)', border:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div className="label">{k.l}</div>
+              <div className="display num" style={{ fontSize:32, color: k.c, lineHeight:1, marginTop:4 }}>{k.v}</div>
+            </div>
+            <div style={{ color: k.c, opacity:.7 }}><Icon name={k.i} size={20}/></div>
+          </div>
+        ))}
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} className="rise" style={{ borderRadius:18, padding:'24px', marginBottom:24, background:'var(--surface)', border:`1px solid ${t.accent}40` }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
+            <h3 className="display" style={{ fontSize:22 }}>{editing ? <>Modifier <span className="display-i" style={{color: t.accent}}>{editing.nom}</span></> : 'Nouvel objet connecté'}</h3>
+            <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); }} style={iconBtn}><Icon name="close" size={14}/></button>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14 }}>
+            <Field label="Nom"><input name="nom" required style={inputStyle} placeholder="Thermostat…" defaultValue={editing?.nom||''}/></Field>
+            <Field label="Marque"><input name="marque" style={inputStyle} placeholder="Netatmo" defaultValue={editing?.marque||''}/></Field>
+            <Field label="Branche">
+              <select name="branche" style={inputStyle} defaultValue={editing?.branche||'Capteur'}>
+                {['Ouvrant','Capteur','Appareil','BesoinAnimal'].map(b => <option key={b}>{b}</option>)}
+              </select>
+            </Field>
+            <Field label="Type">
+              <select name="type" style={inputStyle} defaultValue={editing?.type||'Thermostat'}>
+                {['Porte','PorteGarage','Volet','Fenetre','Thermostat','Climatiseur','Camera','Alarme','DetecteurMouvement','LaveLinge','Television','MachineCafe','Aspirateur','Eau','Nourriture'].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="Pièce">
+              <select name="piece" style={inputStyle} defaultValue={editing?.pieceNom||PIECES[0].nom}>
+                {PIECES.map(p => <option key={p.id}>{p.nom}</option>)}
+              </select>
+            </Field>
+            <Field label="Service">
+              <select name="service" style={inputStyle} defaultValue={editing?.service||'Confort'}>
+                {['Acces','Surveillance','Confort','Animal'].map(s => <option key={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="État">
+              <select name="etat" style={inputStyle} defaultValue={editing?.etat||'ACTIF'}>
+                <option>ACTIF</option><option>INACTIF</option>
+              </select>
+            </Field>
+            <Field label="Connectivité">
+              <select name="connectivite" style={inputStyle} defaultValue={editing?.connectivite||'WIFI'}>
+                <option>WIFI</option><option>BLUETOOTH</option>
+              </select>
+            </Field>
+            <Field label="Batterie %"><input name="batterie" type="number" min="0" max="100" style={inputStyle} placeholder="0–100" defaultValue={editing?.batterie||''}/></Field>
+            <Field label="Valeur affichée"><input name="valeur" style={inputStyle} placeholder="ex : 21.5°C" defaultValue={editing?.valeur||''}/></Field>
+            <div style={{ gridColumn:'span 2', display:'flex', alignItems:'flex-end', gap:8, justifyContent:'flex-end' }}>
+              <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); }} style={ctaSec}>Annuler</button>
+              <button type="submit" style={{...ctaPri, background: t.accent}}>{editing?'Enregistrer':'Créer'} <Icon name="arrow" size={13}/></button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14 }}>
+        <h3 className="display" style={{ fontSize:22 }}>Collection · <span className="num" style={{color: t.accent}}>{items.length}</span></h3>
+        <span className="label">Actions × objet</span>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12, marginBottom:32 }}>
+        {items.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} actions={acts}/>)}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+        <div style={{ borderRadius:18, padding:24, background:'var(--surface)', border:'1px solid var(--line)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+            <Icon name="chart" size={18}/>
+            <h3 className="display" style={{ fontSize:18 }}>Distribution par pièce</h3>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            {parPiece.map(p => {
+              const pct = items.length ? Math.round(p.count / items.length * 100) : 0;
+              return (
+                <div key={p.piece}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6 }}>
+                    <span style={{ fontSize:13, color:'var(--text)' }}>{p.piece}</span>
+                    <span className="mono num" style={{ fontSize:11, color:'var(--text-3)' }}>{p.count} ({pct}%)</span>
+                  </div>
+                  <div style={{ height:6, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${pct}%`, background: t.accent, borderRadius:99, transition:'width .4s' }}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ borderRadius:18, padding:24, background:'var(--surface)', border:'1px solid var(--line)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+            <Icon name="log" size={18}/>
+            <h3 className="display" style={{ fontSize:18 }}>Historique · <span className="num" style={{color: t.accent}}>{history.length}</span></h3>
+          </div>
+          <div style={{ maxHeight:340, overflowY:'auto', display:'flex', flexDirection:'column', gap:10 }}>
+            {history.slice().reverse().map(h => {
+              const isNeg = h.action.includes('SUPPR') || h.action.includes('DÉSACT');
+              const c = isNeg ? 'var(--red)' : (h.action==='CONNEXION' ? 'var(--blue)' : 'var(--green)');
+              return (
+                <div key={h.id} style={{ display:'flex', gap:12, alignItems:'flex-start', padding:'10px 12px', borderRadius:10, background:'var(--bg-2)' }}>
+                  <div style={{ width:6, height:6, borderRadius:'50%', background: c, marginTop:6, flexShrink:0 }}/>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, color:'var(--text)', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <span className="mono" style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:'var(--bg-3)', color: c }}>{h.action}</span>
+                      <span style={{ fontWeight:500 }}>{h.objetNom}</span>
+                    </div>
+                    <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:3 }}>
+                      {h.code} · @{h.utilisateur} {h.details ? `· ${h.details}` : ''}
+                    </div>
+                  </div>
+                  <div className="mono" style={{ fontSize:10, color:'var(--text-4)', whiteSpace:'nowrap' }}>{fmtTime(h.timestamp)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function formFromDetail(detail) {
-    return {
-        type: detail.type ?? 'Porte',
-        nom: detail.nom ?? '',
-        marque: detail.marque ?? '',
-        pieceId: detail.pieceId != null ? String(detail.pieceId) : '',
-        etat: detail.etat ?? 'ACTIF',
-        connectivite: detail.connectivite ?? 'WIFI',
-        batterie: detail.batterie ?? '',
-        position: detail.position ?? '',
-        zone: detail.zone ?? '',
-        cycle: detail.cycle ?? '',
-        consoEnergie: detail.consoEnergie ?? '',
-        niveau: detail.niveau ?? '',
-        animal: detail.animal ?? ''
-    }
+/* ─── APP SHELL ────────────────────────── */
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [page, setPage] = useState('home');
+  const [user, setUser] = useState(null);
+  const [items, setItems] = useState(OBJETS_INIT);
+  const [history, setHistory] = useState(HISTORY_BASE);
+  const [detail, setDetail] = useState(null);
+
+  const addHistory = (h) => {
+    setHistory(p => [...p, { id: Date.now(), timestamp: Date.now(), ...h }]);
+    if (user) setUser(u => ({ ...u, points: u.points + (h.action === 'CONNEXION' ? 0.25 : 0.5) }));
+  };
+  const openDetail = (o) => {
+    setDetail(o);
+    if (user) setUser(u => ({ ...u, points: u.points + 0.5 }));
+  };
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent', t.accent);
+    document.documentElement.style.setProperty('--accent-soft', t.accent + '1f');
+    document.documentElement.style.setProperty('--accent-glow', t.accent + '66');
+  }, [t.accent]);
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [page]);
+
+  const renderPage = () => {
+    const props = { user, setUser, items, setItems, history, addHistory, openDetail, t };
+    if (page==='home') return <HomePage {...props} user={user || USERS.alice}/>;
+    if (page==='recherche') return <SearchPage {...props}/>;
+    if (page==='visualisation') return <VisualisationPage {...props}/>;
+    if (page==='gestion') return <GestionPage {...props}/>;
+  };
+
+  return (
+    <div style={{ minHeight:'100vh', display:'grid', gridTemplateColumns:'240px 1fr', position:'relative', zIndex:1 }}>
+      {/* SIDEBAR */}
+      <aside style={{
+        background:'var(--bg-2)', borderRight:'1px solid var(--line)',
+        padding:'24px 16px', display:'flex', flexDirection:'column',
+        position:'sticky', top:0, height:'100vh',
+      }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:32, padding:'0 8px' }}>
+          <div style={{
+            width:36, height:36, borderRadius:10,
+            background:`linear-gradient(135deg, ${t.accent}, #ff8a47)`,
+            display:'flex', alignItems:'center', justifyContent:'center', color:'#0e1116',
+            fontFamily:"'Fraunces', serif", fontSize:18, fontWeight:600,
+          }}>M</div>
+          <div>
+            <div className="display" style={{ fontSize:15, lineHeight:1 }}>Maison</div>
+            <div className="mono" style={{ fontSize:10, color:'var(--text-3)', marginTop:2 }}>{t.houseName}</div>
+          </div>
+        </div>
+
+        <nav style={{ display:'flex', flexDirection:'column', gap:2 }}>
+          {PAGES.map(p => {
+            const active = page === p.id;
+            const locked = p.id === 'gestion' && user && user.niveauMax !== 'Avancé';
+            return (
+              <button key={p.id} onClick={()=>setPage(p.id)} style={{
+                padding:'10px 12px', borderRadius:10, display:'flex', alignItems:'center', gap:12,
+                background: active ? 'var(--surface)' : 'transparent',
+                color: active ? 'var(--text)' : (locked ? 'var(--text-4)' : 'var(--text-2)'),
+                fontSize:13, fontWeight: active ? 500 : 400, transition:'all .15s',
+                border: active ? '1px solid var(--line-2)' : '1px solid transparent',
+              }}>
+                <Icon name={p.icon} size={16}/>
+                <span style={{ flex:1, textAlign:'left' }}>{p.label}</span>
+                {locked && <Icon name="lock" size={11}/>}
+                {active && <span style={{ width:4, height:4, borderRadius:'50%', background: t.accent, boxShadow:`0 0 6px ${t.accent}` }}/>}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div style={{ marginTop:'auto', padding:'14px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)' }}>
+          {user ? (
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:13, fontWeight:600 }}>{user.photo}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
+                <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts</div>
+              </div>
+              <button onClick={()=>setUser(null)} style={iconBtn}><Icon name="power" size={12}/></button>
+            </div>
+          ) : (
+            <button onClick={()=>setPage('visualisation')} style={{ width:'100%', padding:'8px', fontSize:12, color:'var(--text-2)', display:'flex', alignItems:'center', gap:8 }}>
+              <Icon name="user" size={14}/> Se connecter
+            </button>
+          )}
+        </div>
+
+        <div className="mono" style={{ fontSize:9, color:'var(--text-4)', marginTop:14, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)' }}/>
+          Backend en ligne · v4.0
+        </div>
+      </aside>
+
+      <main style={{ padding:'40px 48px 80px', maxWidth: 1320, width:'100%' }}>
+        {renderPage()}
+      </main>
+
+      <DetailDrawer obj={detail} onClose={()=>setDetail(null)}/>
+
+      <TweaksPanel>
+        <TweakSection label="Identité"/>
+        <TweakText label="Nom de la maison" value={t.houseName} onChange={(v)=>setTweak('houseName', v)}/>
+        <TweakSection label="Couleur"/>
+        <TweakColor label="Accent" value={t.accent} onChange={(v)=>setTweak('accent', v)}/>
+        <TweakSection label="Apparence"/>
+        <TweakToggle label="Densité compacte" value={t.compact} onChange={(v)=>setTweak('compact', v)}/>
+      </TweaksPanel>
+    </div>
+  );
 }
 
-function gestionPayloadFromForm(form) {
-    return {
-        type: form.type,
-        nom: form.nom,
-        marque: emptyToNull(form.marque),
-        pieceId: toNullableInteger(form.pieceId),
-        etat: form.etat,
-        connectivite: form.connectivite,
-        batterie: toNullableFloat(form.batterie),
-        position: toNullableInteger(form.position),
-        zone: emptyToNull(form.zone),
-        cycle: emptyToNull(form.cycle),
-        consoEnergie: toNullableFloat(form.consoEnergie),
-        niveau: toNullableFloat(form.niveau),
-        animal: emptyToNull(form.animal)
-    }
-}
-
-function emptyToNull(value) {
-    if (value == null) return null
-    const trimmed = String(value).trim()
-    return trimmed ? trimmed : null
-}
-
-function toNullableInteger(value) {
-    const v = emptyToNull(value)
-    return v == null ? null : Number.parseInt(v, 10)
-}
-
-function toNullableFloat(value) {
-    const v = emptyToNull(value)
-    return v == null ? null : Number.parseFloat(v)
-}
-
-function toApiUrl(path) {
-    if (/^https?:\/\//i.test(path)) {
-        return path
-    }
-    return `${API_BASE}${path}`
-}
-
-async function fetchJson(url, options = {}) {
-    const response = await fetch(toApiUrl(url), {
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {})
-        },
-        ...options
-    })
-
-    if (response.status === 204) {
-        return null
-    }
-
-    let payload = null
-    const text = await response.text()
-    if (text) {
-        try {
-            payload = JSON.parse(text)
-        } catch {
-            payload = text
-        }
-    }
-
-    if (!response.ok) {
-        const message =
-            (payload && typeof payload === 'object' && (payload.message || payload.error)) ||
-            `HTTP ${response.status}`
-        const error = new Error(message)
-        error.status = response.status
-        throw error
-    }
-
-    return payload
-}
+export default App
