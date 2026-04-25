@@ -33,10 +33,10 @@
   - [x] Activate/deactivate + update object params
   - [x] Basic reports/statistics + history view
 
-- [ ] **P4 Quality & Delivery**
-  - [ ] Responsive checks (mobile/tablet/desktop)
-  - [ ] WCAG basics (contrast, alt text, semantic tags)
-  - [ ] Demo script + report artifacts
+- [x] **P4 Quality & Delivery**
+  - [x] Responsive pass (mobile/tablette/desktop) via media queries + layouts fluides
+  - [x] WCAG basics (skip link, focus visible, rôles `status/alert`, structure sémantique)
+  - [x] Demo script + report artifacts (`docs/DEMO_SCRIPT.md`, `docs/RAPPORT_ARTIFACTS.md`)
 
 ## Working rules
 - Update this file after each meaningful step.

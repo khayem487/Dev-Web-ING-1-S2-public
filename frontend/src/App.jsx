@@ -31,11 +31,7 @@ export default function App() {
     useEffect(() => {
         let cancelled = false
 
-        fetch('/api/health')
-            .then((r) => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`)
-                return r.json()
-            })
+        fetchJson('/api/health')
             .then((data) => {
                 if (!cancelled) setHealth({ state: 'ok', data })
             })
@@ -65,12 +61,14 @@ export default function App() {
 
     return (
         <div className="app-shell">
+            <a href="#main-content" className="skip-link">Aller au contenu principal</a>
+
             <header className="app-header">
                 <div>
                     <h1>Maison Intelligente</h1>
                     <p>Projet Dev Web ING1 — modules Information + Visualisation + Gestion (MVP)</p>
                 </div>
-                <nav>
+                <nav aria-label="Navigation principale">
                     <NavLink to="/" end>
                         Accueil
                     </NavLink>
@@ -80,7 +78,7 @@ export default function App() {
                 </nav>
             </header>
 
-            <main className="app-main">
+            <main id="main-content" className="app-main" tabIndex="-1">
                 <Routes>
                     <Route path="/" element={<HomePage health={health} sessionUser={sessionUser} />} />
                     <Route path="/recherche" element={<SearchPage />} />
@@ -155,7 +153,7 @@ function HomePage({ health, sessionUser }) {
                     <li>➡️ Next: P4 qualité/livraison (responsive, accessibilité, démo)</li>
                 </ul>
                 {sessionUser && (
-                    <p className="ok">
+                    <p className="ok" role="status">
                         Connecté: {sessionUser.prenom} {sessionUser.nom} · Niveau {sessionUser.niveau} ·{' '}
                         {sessionUser.points} pts
                     </p>
@@ -167,12 +165,12 @@ function HomePage({ health, sessionUser }) {
                 {health.state === 'loading' && <p>Chargement...</p>}
                 {health.state === 'ok' && (
                     <div>
-                        <p className="ok">Backend OK</p>
+                        <p className="ok" role="status">Backend OK</p>
                         <pre>{JSON.stringify(health.data, null, 2)}</pre>
                     </div>
                 )}
                 {health.state === 'error' && (
-                    <p className="error">Backend injoignable : {health.message}</p>
+                    <p className="error" role="alert">Backend injoignable : {health.message}</p>
                 )}
             </article>
 
@@ -355,8 +353,8 @@ function AuthPanel({ onSessionRefresh }) {
                     Crée un compte ou connecte-toi pour accéder au profil, consulter les services et
                     accumuler des points selon les actions.
                 </p>
-                {message && <p className="ok">{message}</p>}
-                {error && <p className="error">{error}</p>}
+                {message && <p className="ok" role="status">{message}</p>}
+                {error && <p className="error" role="alert">{error}</p>}
             </article>
 
             <div className="auth-grid">
@@ -540,7 +538,7 @@ function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
                             Bienvenue {profile?.prenom} {profile?.nom}.
                         </p>
                     </div>
-                    <button onClick={logout}>Se déconnecter</button>
+                    <button type="button" onClick={logout}>Se déconnecter</button>
                 </div>
 
                 <div className="kpi-grid">
@@ -593,7 +591,14 @@ function VisualisationDashboard({ sessionUser, onSessionRefresh }) {
                     </label>
                     <button type="submit">Enregistrer profil</button>
                 </form>
-                {saveMsg && <p className={saveMsg.startsWith('Erreur') ? 'error' : 'ok'}>{saveMsg}</p>}
+                {saveMsg && (
+                    <p
+                        className={saveMsg.startsWith('Erreur') ? 'error' : 'ok'}
+                        role={saveMsg.startsWith('Erreur') ? 'alert' : 'status'}
+                    >
+                        {saveMsg}
+                    </p>
+                )}
             </article>
 
             <article className="card">
@@ -804,8 +809,8 @@ function GestionPage({ sessionUser, sessionReady, onSessionRefresh }) {
             <article className="card">
                 <h2>Gestion des objets connectés</h2>
                 <p>CRUD complet, association pièce, activation/désactivation, statistiques et historique.</p>
-                {message && <p className="ok">{message}</p>}
-                {error && <p className="error">{error}</p>}
+                {message && <p className="ok" role="status">{message}</p>}
+                {error && <p className="error" role="alert">{error}</p>}
             </article>
 
             {stats && (
@@ -1069,7 +1074,7 @@ function ResultsCard({ loading, error, items }) {
         <article className="card">
             <h3>Résultats</h3>
             {loading && <p>Chargement...</p>}
-            {error && <p className="error">{error}</p>}
+            {error && <p className="error" role="alert">{error}</p>}
 
             {!loading && !error && (
                 <>

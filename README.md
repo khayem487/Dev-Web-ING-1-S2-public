@@ -29,7 +29,7 @@ Le module **Administration est volontairement exclu** (correction du prof).
 │   ├── package.json
 │   ├── vite.config.js      # proxy /api -> http://localhost:8080
 │   └── src/
-│       ├── App.jsx         # Router + pages /, /recherche, /visualisation
+│       ├── App.jsx         # Router + pages /, /recherche, /visualisation, /gestion
 │       ├── App.css         # styles MVP
 │       └── index.jsx       # BrowserRouter mount
 └── .env.example
@@ -118,5 +118,7 @@ Suivi projet dans ce repo :
 - [NEXT_TASKS.md](NEXT_TASKS.md) — backlog MVP
 - [DECISIONS.md](DECISIONS.md) — choix validés
 - [PLAN.md](PLAN.md) — plan d'exécution et jalons
+- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — trame de présentation
+- [docs/RAPPORT_ARTIFACTS.md](docs/RAPPORT_ARTIFACTS.md) — checklist des éléments à joindre au rapport
 
 Jamais de secrets/tokens dans le repo.
