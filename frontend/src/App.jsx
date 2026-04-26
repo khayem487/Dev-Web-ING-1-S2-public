@@ -75,6 +75,8 @@ const DEMO_CREDENTIALS = [
   { email: 'admin@demo.local', motDePasse: 'demo1234', label: 'Admin', niveauMax: 'Avancé' },
 ]
 
+const PAGE_STORAGE_KEY = 'devweb.currentPage'
+
 const SCENARIO_TYPES = ['MANUAL', 'SCHEDULED', 'CONDITIONAL']
 const CRON_PRESETS = [
   { label: 'Tous les jours à 8h00', cron: '0 0 8 * * *' },
@@ -1621,7 +1623,7 @@ function AvatarBadge({ user, size = 48, accent = 'var(--accent)' }) {
 }
 
 /* ─── LOGIN / VISUALISATION ─────────────── */
-function VisualisationPage({ user, pieces, onLogin, onRegister, onVerifyEmail, onResendVerification, onLogout, onSessionRefresh, openDetail, t }) {
+function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onVerifyEmail, onResendVerification, onLogout, onSessionRefresh, openDetail, t }) {
   const [filters, setFilters] = useState({ service:'', etat:'', pieceId:'', q:'' });
   const [profile, setProfile] = useState(user);
   const [services, setServices] = useState([]);
@@ -1633,6 +1635,7 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onVerifyEmail, o
     pseudo:'', bioPublique:'', telephonePrive:'', adressePrivee:'',
     genre:'', dateNaissance:'', ville:''
   });
+  const profilePhotoInputRef = useRef(null)
 
   useEffect(() => {
     setProfile(user)
@@ -1701,7 +1704,7 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onVerifyEmail, o
     return () => { cancelled = true }
     // Key on user?.id (stable), not the user object whose reference flips on every setUser.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, filters.service, filters.etat, filters.pieceId, filters.q])
+  }, [user?.id, refreshTick, filters.service, filters.etat, filters.pieceId, filters.q])
 
   if (!user) {
     return (
@@ -1778,7 +1781,23 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onVerifyEmail, o
       }}>
         <div style={{ position:'absolute', top:-50, right:-50, width:200, height:200, borderRadius:'50%', background:`radial-gradient(circle, ${t.accent}30, transparent 70%)`, pointerEvents:'none' }}/>
         <div style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:24, alignItems:'center', position:'relative' }}>
-          <AvatarBadge user={currentUser} size={72} accent={t.accent} />
+          <div>
+            <button
+              type="button"
+              onClick={() => profilePhotoInputRef.current?.click()}
+              title="Cliquer pour changer la photo"
+              style={{ background:'transparent', border:'none', padding:0, cursor:'pointer' }}
+            >
+              <AvatarBadge user={currentUser} size={72} accent={t.accent} />
+            </button>
+            <input
+              ref={profilePhotoInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display:'none' }}
+              onChange={(e) => uploadProfilePhoto(e.target.files?.[0])}
+            />
+          </div>
 
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
@@ -1861,12 +1880,13 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onVerifyEmail, o
 
       <form onSubmit={saveProfile} style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
         <Field label="Photo de profil">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => uploadProfilePhoto(e.target.files?.[0])}
-            style={inputStyle}
-          />
+          <button
+            type="button"
+            onClick={() => profilePhotoInputRef.current?.click()}
+            style={{ ...ctaSec, width:'100%' }}
+          >
+            Choisir une image (ou clique l'avatar en haut)
+          </button>
         </Field>
         <Field label="Pseudo"><input value={profileForm.pseudo} onChange={(e) => setProfileForm((p) => ({ ...p, pseudo: e.target.value }))} style={inputStyle}/></Field>
         <Field label="Téléphone privé"><input value={profileForm.telephonePrive} onChange={(e) => setProfileForm((p) => ({ ...p, telephonePrive: e.target.value }))} style={inputStyle}/></Field>
@@ -2091,7 +2111,7 @@ const inputStyle = {
 };
 
 /* ─── GESTION ──────────────────────────── */
-function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandled, scenarios = [], onRunScenario, onScenariosChanged }) {
+function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal, onFormHandled, scenarios = [], onRunScenario, onScenariosChanged }) {
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState('');
@@ -2140,7 +2160,7 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
 
   useEffect(() => {
     loadGestion()
-  }, [user?.email])
+  }, [user?.email, refreshTick])
 
   if (!user) {
     return (
@@ -3175,7 +3195,14 @@ const APP_THEME = { accent: ACCENT, houseName: HOUSE_NAME }
 
 function App() {
   const t = APP_THEME
-  const [page, setPage] = useState('home');
+  const [page, setPage] = useState(() => {
+    try {
+      const saved = localStorage.getItem(PAGE_STORAGE_KEY)
+      return PAGES.some((p) => p.id === saved) ? saved : 'home'
+    } catch {
+      return 'home'
+    }
+  });
   const [user, setUser] = useState(null);
   const [items, setItems] = useState([]);
   const [pieces, setPieces] = useState(PIECES);
@@ -3183,6 +3210,7 @@ function App() {
   const [health, setHealth] = useState({ state: 'loading' })
   const [gestionFormSignal, setGestionFormSignal] = useState(0)
   const [scenarios, setScenarios] = useState([])
+  const [refreshTick, setRefreshTick] = useState(0)
   const [toast, setToast] = useState(null) // { kind: 'success'|'error', message: string }
   const canManage = user?.niveauMax === 'Avancé'
   const visiblePages = useMemo(
@@ -3237,6 +3265,8 @@ function App() {
     setToast({ kind, message })
     setTimeout(() => setToast(null), 3500)
   }
+
+  const bumpRefresh = () => setRefreshTick((n) => n + 1)
 
   useEffect(() => {
     refreshSession()
@@ -3320,6 +3350,7 @@ function App() {
         body: JSON.stringify({ actif: target === 'ACTIF' })
       })
       await refreshPublic()
+      bumpRefresh()
       setDetail((current) => current && current.id === obj.id ? { ...current, etat: target } : current)
       showToast('success', `${obj.nom} → ${target.toLowerCase()}`)
     } catch (e) {
@@ -3352,6 +3383,7 @@ function App() {
         body: JSON.stringify(payload)
       })
       await refreshPublic()
+      bumpRefresh()
       setDetail((current) => current && current.id === obj.id ? toUiItem({ ...current, ...patch }) : current)
       showToast('success', `${obj.nom} mis à jour`)
     } catch (e) {
@@ -3367,6 +3399,7 @@ function App() {
       showToast('success', `${label} exécuté · ${n} action${n > 1 ? 's' : ''}`)
       await refreshPublic()
       await refreshScenarios()
+      bumpRefresh()
     } catch (e) {
       showToast('error', `Exécution impossible : ${e.message}`)
     }
@@ -3379,6 +3412,14 @@ function App() {
   }, [t.accent]);
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [page]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PAGE_STORAGE_KEY, page)
+    } catch {
+      // ignore storage errors
+    }
+  }, [page])
 
   useEffect(() => {
     if (page === 'admin' && !user?.admin) {
@@ -3401,6 +3442,7 @@ function App() {
     if (page==='visualisation') return (
       <VisualisationPage
         {...props}
+        refreshTick={refreshTick}
         onLogin={handleLogin}
         onRegister={handleRegister}
         onVerifyEmail={handleVerifyEmail}
@@ -3412,6 +3454,7 @@ function App() {
     if (page==='gestion') return (
       <GestionPage
         {...props}
+        refreshTick={refreshTick}
         openFormSignal={gestionFormSignal}
         onFormHandled={() => setGestionFormSignal(0)}
         scenarios={scenarios}
