@@ -6,7 +6,8 @@
   1. Information
   2. Visualisation
   3. Gestion
-- **Administration module is intentionally excluded** (teacher correction after initial spec).
+  4. Administration
+- Scope history: Administration was initially excluded after teacher correction, then **re-enabled on 2026-04-26** (team/user decision) to deliver the full project.
 
 ## Mandatory constraints
 - Real **database** required (no file-only storage).
@@ -17,7 +18,7 @@
 
 ## User progression logic (project rule)
 - Roles/type include visitor + authenticated member flow.
-- Levels: debutant/intermediaire/avance (expert/admin not in scope for module delivery).
+- Levels: debutant/intermediaire/avance for member progression; admin is handled as governance privilege (`Utilisateur.admin`).
 - Points/usage tracking required (connections + actions), with level updates.
 
 ## Collaboration rules
