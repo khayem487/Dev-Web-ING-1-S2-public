@@ -21,6 +21,7 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -103,6 +104,38 @@ public class AdminController {
                 "Admin role " + (saved.isAdmin() ? "granted" : "revoked") + " for " + saved.getEmail());
 
         return UserProfileDTO.from(saved);
+    }
+
+    @DeleteMapping("/utilisateurs/{id}")
+    @Transactional
+    public Map<String, Object> deleteUtilisateur(@PathVariable Long id,
+                                                 HttpSession session) {
+        Utilisateur admin = sessionUtilisateurService.requireAdmin(session);
+        Utilisateur cible = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable: " + id));
+
+        if (admin.getId().equals(cible.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Impossible de supprimer votre propre compte admin");
+        }
+
+        if (cible.isAdmin()) {
+            long adminCount = utilisateurRepository.countByAdminTrue();
+            if (adminCount <= 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de supprimer le dernier admin actif");
+            }
+        }
+
+        // Conserver l'intégrité référentielle avant suppression utilisateur.
+        demandeSuppressionRepository.detachTraitePar(cible);
+        demandeSuppressionRepository.deleteByDemandeur(cible);
+        historiqueActionRepository.deleteByUtilisateur(cible);
+        utilisateurRepository.delete(cible);
+
+        pointsService.record(admin, ActionType.ADMIN_DECISION, null,
+                "Suppression compte utilisateur: " + cible.getEmail());
+
+        return Map.of("ok", true, "deletedUserId", id, "deletedEmail", cible.getEmail());
     }
 
     @GetMapping("/demandes-suppression")

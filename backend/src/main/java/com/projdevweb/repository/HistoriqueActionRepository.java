@@ -20,6 +20,8 @@ public interface HistoriqueActionRepository extends JpaRepository<HistoriqueActi
 
     long countByUtilisateur(Utilisateur utilisateur);
 
+    long deleteByUtilisateur(Utilisateur utilisateur);
+
     @Modifying
     @Query("update HistoriqueAction h set h.objet = null where h.objet = :objet")
     int detachObjet(@Param("objet") ObjetConnecte objet);

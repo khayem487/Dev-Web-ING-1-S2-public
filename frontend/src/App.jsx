@@ -83,6 +83,7 @@ const DEMO_CREDENTIALS = [
 ]
 
 const PAGE_STORAGE_KEY = 'devweb.currentPage'
+const THEME_STORAGE_KEY = 'devweb.theme'
 
 const SCENARIO_TYPES = ['MANUAL', 'SCHEDULED', 'CONDITIONAL']
 const SCENARIO_TRIGGER_EVENTS = [
@@ -445,6 +446,8 @@ function Icon({ name, size=18 }) {
     bell: <><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></>,
     log: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></>,
     chart: <><path d="M3 3v18h18M7 14l4-4 4 4 5-5"/></>,
+    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></>,
+    moon: <><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></>,
   };
   return <svg viewBox="0 0 24 24" style={s}>{p[name] || p.grid}</svg>;
 }
@@ -2267,6 +2270,15 @@ function ProfileEditorModal({ open, user, onClose, onUpdated, accent = 'var(--ac
     setMsg('')
   }, [open, user])
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose])
+
   if (!open || !user) return null
 
   const save = async (e) => {
@@ -2313,7 +2325,14 @@ function ProfileEditorModal({ open, user, onClose, onUpdated, accent = 'var(--ac
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Modifier mon profil" style={{
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Modifier mon profil"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.()
+      }}
+      style={{
       position:'fixed', inset:0, zIndex:320, background:'rgba(0,0,0,.58)',
       display:'grid', placeItems:'center', padding:20
     }}>
@@ -3768,6 +3787,21 @@ function AdminPage({ user, t, onChanged }) {
     [requests]
   )
 
+  const adminCount = useMemo(
+    () => users.filter((u) => u.admin).length,
+    [users]
+  )
+
+  const recentUsersCount = useMemo(() => {
+    const weekMs = 7 * 24 * 60 * 60 * 1000
+    const now = Date.now()
+    return users.filter((u) => {
+      if (!u.dateInscription) return false
+      const t = new Date(u.dateInscription).getTime()
+      return Number.isFinite(t) && (now - t) <= weekMs
+    }).length
+  }, [users])
+
   const fmtDate = (ts) => {
     if (!ts) return '-'
     const d = new Date(ts)
@@ -3798,6 +3832,19 @@ function AdminPage({ user, t, onChanged }) {
         body: JSON.stringify({ admin: !target.admin })
       })
       await load()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const deleteUser = async (target) => {
+    if (!target?.id) return
+    const ok = window.confirm(`Supprimer définitivement le compte ${target.email} ?`)
+    if (!ok) return
+    try {
+      await fetchJson(`/api/admin/utilisateurs/${target.id}`, { method: 'DELETE' })
+      await load()
+      onChanged?.()
     } catch (e) {
       setError(e.message)
     }
@@ -3849,6 +3896,25 @@ function AdminPage({ user, t, onChanged }) {
             />
           </div>
         </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(120px, 1fr))', gap:8 }}>
+          <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
+            <div className="label">Utilisateurs</div>
+            <div className="display" style={{ fontSize:20 }}>{users.length}</div>
+          </div>
+          <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
+            <div className="label">Admins</div>
+            <div className="display" style={{ fontSize:20, color:t.accent }}>{adminCount}</div>
+          </div>
+          <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
+            <div className="label">Demandes pending</div>
+            <div className="display" style={{ fontSize:20 }}>{pendingCount}</div>
+          </div>
+          <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
+            <div className="label">Inscrits 7j</div>
+            <div className="display" style={{ fontSize:20 }}>{recentUsersCount}</div>
+          </div>
+        </div>
       </article>
 
       <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16 }}>
@@ -3894,9 +3960,26 @@ function AdminPage({ user, t, onChanged }) {
                 <div style={{ fontSize:13, color:'var(--text)' }}>{u.prenom} {u.nom} · {u.email}</div>
                 <div style={{ fontSize:11, color:'var(--text-3)' }}>{u.typeMembre} · {u.niveau}</div>
               </div>
-              <button type="button" onClick={() => toggleAdmin(u)} style={{ ...(u.admin ? ctaSec : ctaPri), background: u.admin ? undefined : t.accent }}>
-                {u.admin ? 'Retirer admin' : 'Passer admin'}
-              </button>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                <button type="button" onClick={() => toggleAdmin(u)} style={{ ...(u.admin ? ctaSec : ctaPri), background: u.admin ? undefined : t.accent }}>
+                  {u.admin ? 'Retirer admin' : 'Passer admin'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteUser(u)}
+                  disabled={u.id === user?.id}
+                  style={{
+                    ...ctaSec,
+                    color:'var(--red)',
+                    borderColor:'var(--red)40',
+                    opacity: u.id === user?.id ? 0.55 : 1,
+                    cursor: u.id === user?.id ? 'not-allowed' : 'pointer'
+                  }}
+                  title={u.id === user?.id ? 'Auto-suppression désactivée' : 'Supprimer le compte'}
+                >
+                  Supprimer compte
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -3909,6 +3992,13 @@ const APP_THEME = { accent: ACCENT, houseName: HOUSE_NAME }
 
 function App() {
   const t = APP_THEME
+  const [themeMode, setThemeMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY)
+      if (saved === 'light' || saved === 'dark') return saved
+    } catch {}
+    return 'dark'
+  })
   const [page, setPage] = useState(() => {
     try {
       const saved = localStorage.getItem(PAGE_STORAGE_KEY)
@@ -3935,6 +4025,13 @@ function App() {
     () => PAGES.filter((p) => !p.adminOnly || user?.admin),
     [user?.admin]
   )
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', themeMode)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, themeMode)
+    } catch {}
+  }, [themeMode])
 
   const refreshSession = async () => {
     try {
@@ -4339,7 +4436,33 @@ function App() {
           })}
         </nav>
 
-        <div style={{ marginTop:'auto', padding:'14px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)' }}>
+        <div style={{ marginTop:'auto', display:'grid', gap:10 }}>
+          <button
+            type="button"
+            onClick={() => setThemeMode((m) => m === 'dark' ? 'light' : 'dark')}
+            style={{
+              width:'100%',
+              padding:'10px 12px',
+              borderRadius:10,
+              border:'1px solid var(--line)',
+              background:'var(--surface)',
+              color:'var(--text)',
+              display:'flex',
+              alignItems:'center',
+              justifyContent:'space-between',
+              gap:8,
+              fontSize:12,
+            }}
+            aria-label={themeMode === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+          >
+            <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <Icon name={themeMode === 'dark' ? 'sun' : 'moon'} size={14}/>
+              {themeMode === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            </span>
+            <span className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{themeMode.toUpperCase()}</span>
+          </button>
+
+          <div style={{ padding:'14px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)' }}>
           {user ? (
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <button
@@ -4371,6 +4494,7 @@ function App() {
               <Icon name="user" size={14}/> Se connecter
             </button>
           )}
+          </div>
         </div>
 
         <div role="status" aria-live="polite" className="mono" style={{ fontSize:9, color:'var(--text-4)', marginTop:14, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
