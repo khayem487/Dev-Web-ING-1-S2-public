@@ -399,6 +399,11 @@ public class GestionController {
             case "lavelinge" -> new LaveLinge(nom, marque, etat, connectivite, batterie, piece, defaultString(request.cycle(), "Standard"));
             case "nourriture" -> new Nourriture(nom, marque, etat, connectivite, batterie, piece, defaultFloat(request.niveau(), 50f), defaultString(request.animal(), "Animal"));
             case "eau" -> new Eau(nom, marque, etat, connectivite, batterie, piece, defaultFloat(request.niveau(), 50f), defaultString(request.animal(), "Animal"));
+            case "fenetre" -> new Fenetre(nom, marque, etat, connectivite, batterie, piece, defaultInteger(request.position(), 0));
+            case "detecteurmouvement" -> new DetecteurMouvement(nom, marque, etat, connectivite, batterie, piece, defaultString(request.zone(), "Zone"));
+            case "climatiseur" -> new Climatiseur(nom, marque, etat, connectivite, batterie, piece);
+            case "alarme" -> new Alarme(nom, marque, etat, connectivite, batterie, piece);
+            case "aspirateur" -> new Aspirateur(nom, marque, etat, connectivite, batterie, piece);
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type objet non supporté: " + request.type());
         };
     }

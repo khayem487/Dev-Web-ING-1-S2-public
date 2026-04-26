@@ -7,7 +7,12 @@ import com.projdevweb.model.Chambre;
 import com.projdevweb.model.Connectivite;
 import com.projdevweb.model.Cuisine;
 import com.projdevweb.model.DonneeCapteur;
+import com.projdevweb.model.Alarme;
+import com.projdevweb.model.Aspirateur;
+import com.projdevweb.model.Climatiseur;
+import com.projdevweb.model.DetecteurMouvement;
 import com.projdevweb.model.Eau;
+import com.projdevweb.model.Fenetre;
 import com.projdevweb.model.Enfant;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.Garage;
@@ -164,11 +169,25 @@ public class DataSeeder implements CommandLineRunner {
         Eau fontaine = new Eau("Fontaine à eau", "PetKit", Etat.ACTIF, Connectivite.WIFI, 68f, getPiece(pieceByName, "Cuisine"), 46f, "Chat");
         fontaine.setPortionGrammes(50);
 
+        // Nouveaux types — extensión UML
+        Fenetre fenetreSalon = new Fenetre("Fenêtre baie vitrée", "Velux",Etat.ACTIF, Connectivite.WIFI, 92f, getPiece(pieceByName, "Salon"), 0);
+        DetecteurMouvement detecteurSalon = new DetecteurMouvement("Détecteur présence salon", "Bosch",Etat.ACTIF, Connectivite.ZIGBEE, 85f, getPiece(pieceByName, "Salon"), "Sécurité");
+        DetecteurMouvement detecteurGarage = new DetecteurMouvement("Détecteur garage", "Bosch",Etat.ACTIF, Connectivite.ZIGBEE, 70f, getPiece(pieceByName, "Garage"), "Garage");
+        Climatiseur climChambre = new Climatiseur("Climatisation chambre", "Daikin",Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"));
+        climChambre.setModeClim(Climatiseur.ModeClim.AUTO.name());
+        climChambre.setTempCible(20);
+        Alarme alarme = new Alarme("Système d'alarme", "Somfy",Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
+        alarme.setStatut(Alarme.StatutAlarme.DESARMEE);
+        Aspirateur aspirateur = new Aspirateur("Aspirateur robot", "Roomba",Etat.ACTIF, Connectivite.WIFI, 95f, getPiece(pieceByName, "Cuisine"));
+        aspirateur.setStatutAspirateur(Aspirateur.StatutAspirateur.EN_VEILLE);
+
         objetConnecteRepository.saveAll(List.of(
                 porteEntree, voletSalon, voletChambre, porteGarage,
                 thermoSalon, thermoChambre, camEntree, camGarage,
                 tv, laveLinge,
-                distributeur, fontaine
+                distributeur, fontaine,
+                fenetreSalon, detecteurSalon, detecteurGarage,
+                climChambre, alarme, aspirateur
         ));
     }
 
