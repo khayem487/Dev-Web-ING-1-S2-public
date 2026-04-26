@@ -95,7 +95,10 @@
     - endpoint `GET /api/gestion/maintenance`
     - action `POST /api/gestion/objets/{id}/maintenance/reparer`
     - panel maintenance visible dans Gestion (sévérité + raisons + bouton)
-  - [ ] Exports CSV (objets + consommation).
+  - [x] Exports CSV (objets + consommation).
+    - `GET /api/gestion/exports/objets`
+    - `GET /api/gestion/exports/conso`
+    - boutons front Gestion pour téléchargement direct
   - [ ] Profil enrichi (champs perso additionnels) si validé par le groupe.
 
 - [ ] **P7 Automation réactive + énergie + notifications**

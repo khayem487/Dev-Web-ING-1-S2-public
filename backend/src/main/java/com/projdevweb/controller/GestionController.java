@@ -43,7 +43,10 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -63,6 +66,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 /**
@@ -321,6 +325,57 @@ public class GestionController {
         return GestionObjetDetailDTO.from(saved);
     }
 
+    @GetMapping(value = "/exports/objets", produces = "text/csv")
+    public ResponseEntity<String> exportObjetsCsv(HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
+        List<ObjetConnecteDTO> objets = objetConnecteRepository.findAll().stream().map(ObjetConnecteDTO::from).toList();
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("id,nom,type,service,piece,etat,connectivite,batterie,derniereMaintenance\n");
+        for (ObjetConnecteDTO o : objets) {
+            csv.append(csv(o.id())).append(',')
+                    .append(csv(o.nom())).append(',')
+                    .append(csv(o.type())).append(',')
+                    .append(csv(o.service())).append(',')
+                    .append(csv(o.pieceNom())).append(',')
+                    .append(csv(o.etat() != null ? o.etat().name() : null)).append(',')
+                    .append(csv(o.connectivite() != null ? o.connectivite().name() : null)).append(',')
+                    .append(csv(o.batterie())).append(',')
+                    .append(csv(o.derniereMaintenance()))
+                    .append('\n');
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=gestion_objets.csv")
+                .contentType(new MediaType("text", "csv"))
+                .body(csv.toString());
+    }
+
+    @GetMapping(value = "/exports/conso", produces = "text/csv")
+    public ResponseEntity<String> exportConsoCsv(HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
+        List<ObjetConnecte> objets = objetConnecteRepository.findAll();
+
+        Map<String, Double> consoByService = objets.stream()
+                .collect(Collectors.groupingBy(
+                        o -> ObjetConnecteDTO.from(o).service(),
+                        Collectors.summingDouble(o -> {
+                            if (o instanceof Appareil a && a.getConsoEnergie() != null) return a.getConsoEnergie();
+                            return 0d;
+                        })
+                ));
+
+        StringJoiner joiner = new StringJoiner("\n");
+        joiner.add("service,consoTotale");
+        consoByService.forEach((service, conso) ->
+                joiner.add(csv(service) + "," + csv(String.format(Locale.US, "%.2f", conso))));
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=gestion_conso.csv")
+                .contentType(new MediaType("text", "csv"))
+                .body(joiner.toString() + "\n");
+    }
+
     // ---------- helpers ----------
 
     private ObjetConnecte buildByType(GestionObjetUpsertRequest request, Piece piece) {
@@ -511,6 +566,13 @@ public class GestionController {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String csv(Object value) {
+        if (value == null) return "";
+        String raw = String.valueOf(value);
+        String escaped = raw.replace("\"", "\"\"");
+        return '"' + escaped + '"';
     }
 
     private MaintenanceItemDTO toMaintenanceItem(ObjetConnecte objet) {

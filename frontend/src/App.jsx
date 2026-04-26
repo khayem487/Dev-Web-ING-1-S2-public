@@ -2024,6 +2024,28 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
 
   const flash = (s) => { setMsg(s); setTimeout(()=>setMsg(''), 2500); };
 
+  const downloadCsv = async (kind) => {
+    try {
+      const response = await fetch(toApiUrl(`/api/gestion/exports/${kind}`), { credentials: 'include' })
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(text || `HTTP ${response.status}`)
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = kind === 'objets' ? 'gestion_objets.csv' : 'gestion_conso.csv'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      flash(`Export CSV ${kind} téléchargé`) 
+    } catch (e) {
+      setError(e.message || 'Export impossible')
+    }
+  }
+
   const acts = {
     edit: async (o) => {
       try {
@@ -2118,9 +2140,13 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
           <div className="label" style={{ marginBottom:8, color: t.accent }}>Module III · administration</div>
           <h1 className="display" style={{ fontSize:42, lineHeight:1.05 }}>Gestion des <span className="display-i" style={{color: t.accent}}>objets connectés</span></h1>
         </div>
-        <button onClick={()=>{ setEditing(null); setShowForm(!showForm); }} style={{...ctaPri, background: t.accent}}>
-          <Icon name="plus" size={14}/>{showForm && !editing ? 'Replier' : 'Nouvel objet'}
-        </button>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+          <button type="button" onClick={() => downloadCsv('objets')} style={ctaSec}>Export objets CSV</button>
+          <button type="button" onClick={() => downloadCsv('conso')} style={ctaSec}>Export conso CSV</button>
+          <button onClick={()=>{ setEditing(null); setShowForm(!showForm); }} style={{...ctaPri, background: t.accent}}>
+            <Icon name="plus" size={14}/>{showForm && !editing ? 'Replier' : 'Nouvel objet'}
+          </button>
+        </div>
       </div>
 
       {error && <div style={{ marginBottom: 10, color:'var(--red)', fontSize:12 }}>{error}</div>}
