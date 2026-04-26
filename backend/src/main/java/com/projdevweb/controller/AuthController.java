@@ -17,6 +17,7 @@ import com.projdevweb.service.PointsService;
 import com.projdevweb.service.SessionUtilisateurService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,15 +41,18 @@ public class AuthController {
     private final SessionUtilisateurService sessionUtilisateurService;
     private final PasswordService passwordService;
     private final PointsService pointsService;
+    private final boolean emailVerificationEnabled;
 
     public AuthController(UtilisateurRepository utilisateurRepository,
                           SessionUtilisateurService sessionUtilisateurService,
                           PasswordService passwordService,
-                          PointsService pointsService) {
+                          PointsService pointsService,
+                          @Value("${app.auth.email-verification-enabled:false}") boolean emailVerificationEnabled) {
         this.utilisateurRepository = utilisateurRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
         this.passwordService = passwordService;
         this.pointsService = pointsService;
+        this.emailVerificationEnabled = emailVerificationEnabled;
     }
 
     @PostMapping("/register")
@@ -66,7 +70,7 @@ public class AuthController {
                 emailNorm,
                 hash);
 
-        boolean verificationRequired = !emailNorm.endsWith("@demo.local");
+        boolean verificationRequired = emailVerificationEnabled && !emailNorm.endsWith("@demo.local");
         if (verificationRequired) {
             utilisateur.setEmailVerifie(false);
             utilisateur.setEmailVerificationToken(generateVerificationToken());
@@ -94,7 +98,7 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Email ou mot de passe invalide");
         }
 
-        if (!utilisateur.isEmailVerifie()) {
+        if (emailVerificationEnabled && !utilisateur.isEmailVerifie()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "Email non vérifié. Valide le code de vérification avant connexion.");
         }

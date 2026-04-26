@@ -1622,6 +1622,127 @@ function AvatarBadge({ user, size = 48, accent = 'var(--accent)' }) {
   )
 }
 
+function ProfileEditorModal({ open, user, onClose, onUpdated, accent = 'var(--accent)' }) {
+  const [form, setForm] = useState({
+    pseudo:'', bioPublique:'', telephonePrive:'', adressePrivee:'',
+    genre:'', dateNaissance:'', ville:''
+  })
+  const [msg, setMsg] = useState('')
+  const [saving, setSaving] = useState(false)
+  const fileInputRef = useRef(null)
+
+  useEffect(() => {
+    if (!open || !user) return
+    setForm({
+      pseudo: user.pseudo || '',
+      bioPublique: user.bioPublique || '',
+      telephonePrive: user.telephonePrive || '',
+      adressePrivee: user.adressePrivee || '',
+      genre: user.genre || '',
+      dateNaissance: user.dateNaissance || '',
+      ville: user.ville || ''
+    })
+    setMsg('')
+  }, [open, user])
+
+  if (!open || !user) return null
+
+  const save = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setMsg('')
+    try {
+      const updated = await fetchJson('/api/visualisation/profile', {
+        method: 'PUT',
+        body: JSON.stringify(form)
+      })
+      onUpdated?.(toUiUser(updated), 'Profil mis à jour ✅')
+    } catch (err) {
+      setMsg(`Erreur: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const uploadPhoto = async (file) => {
+    if (!file) return
+    setSaving(true)
+    setMsg('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const response = await fetch(toApiUrl('/api/visualisation/profile/photo'), {
+        method: 'POST',
+        credentials: 'include',
+        body: fd
+      })
+      const text = await response.text()
+      const payload = text ? JSON.parse(text) : null
+      if (!response.ok) {
+        const message = payload?.message || payload?.error || `HTTP ${response.status}`
+        throw new Error(message)
+      }
+      onUpdated?.(toUiUser(payload), 'Photo profil mise à jour ✅')
+    } catch (err) {
+      setMsg(`Erreur: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Modifier mon profil" style={{
+      position:'fixed', inset:0, zIndex:320, background:'rgba(0,0,0,.58)',
+      display:'grid', placeItems:'center', padding:20
+    }}>
+      <form onSubmit={save} style={{
+        width:'min(760px, 100%)', borderRadius:16, background:'var(--surface)',
+        border:'1px solid var(--line-2)', padding:18, display:'grid', gap:12
+      }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <h3 className="display" style={{ fontSize:24 }}>Mon profil</h3>
+          <button type="button" onClick={onClose} style={ctaSec}>Fermer</button>
+        </div>
+
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <button type="button" onClick={() => fileInputRef.current?.click()} style={{ background:'transparent', border:'none', padding:0, cursor:'pointer' }}>
+            <AvatarBadge user={user} size={72} accent={accent} />
+          </button>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, color:'var(--text)' }}>{user.prenom} {user.nom}</div>
+            <div className="mono" style={{ fontSize:11, color:'var(--text-3)' }}>{user.email}</div>
+            <button type="button" onClick={() => fileInputRef.current?.click()} style={{ ...ctaSec, marginTop:8, padding:'8px 12px', fontSize:12 }}>Changer la photo</button>
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={(e) => uploadPhoto(e.target.files?.[0])} />
+          </div>
+        </div>
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
+          <Field label="Pseudo"><input value={form.pseudo} onChange={(e)=>setForm((f)=>({ ...f, pseudo:e.target.value }))} style={inputStyle}/></Field>
+          <Field label="Téléphone privé"><input value={form.telephonePrive} onChange={(e)=>setForm((f)=>({ ...f, telephonePrive:e.target.value }))} style={inputStyle}/></Field>
+          <Field label="Ville"><input value={form.ville} onChange={(e)=>setForm((f)=>({ ...f, ville:e.target.value }))} style={inputStyle}/></Field>
+          <Field label="Genre">
+            <select value={form.genre} onChange={(e)=>setForm((f)=>({ ...f, genre:e.target.value }))} style={inputStyle}>
+              <option value="">—</option>
+              <option value="HOMME">Homme</option>
+              <option value="FEMME">Femme</option>
+              <option value="AUTRE">Autre</option>
+            </select>
+          </Field>
+          <Field label="Date de naissance"><input type="date" value={form.dateNaissance || ''} onChange={(e)=>setForm((f)=>({ ...f, dateNaissance:e.target.value || null }))} style={inputStyle}/></Field>
+          <div />
+          <div style={{ gridColumn:'span 2' }}><Field label="Bio publique"><input value={form.bioPublique} onChange={(e)=>setForm((f)=>({ ...f, bioPublique:e.target.value }))} style={inputStyle}/></Field></div>
+          <div style={{ gridColumn:'span 2' }}><Field label="Adresse privée"><input value={form.adressePrivee} onChange={(e)=>setForm((f)=>({ ...f, adressePrivee:e.target.value }))} style={inputStyle}/></Field></div>
+        </div>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:12, color: msg.startsWith('Erreur') ? 'var(--red)' : 'var(--text-3)' }}>{msg}</span>
+          <button disabled={saving} type="submit" style={{ ...ctaPri, background: accent }}>{saving ? 'Enregistrement...' : 'Enregistrer profil'}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 /* ─── LOGIN / VISUALISATION ─────────────── */
 function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onVerifyEmail, onResendVerification, onLogout, onSessionRefresh, openDetail, t }) {
   const [filters, setFilters] = useState({ service:'', etat:'', pieceId:'', q:'' });
@@ -1630,24 +1751,9 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [saveMsg, setSaveMsg] = useState('');
-  const [profileForm, setProfileForm] = useState({
-    pseudo:'', bioPublique:'', telephonePrive:'', adressePrivee:'',
-    genre:'', dateNaissance:'', ville:''
-  });
-  const profilePhotoInputRef = useRef(null)
 
   useEffect(() => {
     setProfile(user)
-    setProfileForm({
-      pseudo: user?.pseudo || '',
-      bioPublique: user?.bioPublique || '',
-      telephonePrive: user?.telephonePrive || '',
-      adressePrivee: user?.adressePrivee || '',
-      genre: user?.genre || '',
-      dateNaissance: user?.dateNaissance || '',
-      ville: user?.ville || ''
-    })
   }, [user])
 
   useEffect(() => {
@@ -1675,15 +1781,6 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
 
         const uiProfile = toUiUser(profileData)
         setProfile(uiProfile)
-        setProfileForm({
-          pseudo: profileData?.pseudo || '',
-          bioPublique: profileData?.bioPublique || '',
-          telephonePrive: profileData?.telephonePrive || '',
-          adressePrivee: profileData?.adressePrivee || '',
-          genre: profileData?.genre || '',
-          dateNaissance: profileData?.dateNaissance || '',
-          ville: profileData?.ville || ''
-        })
         setServices(Array.isArray(servicesData) ? servicesData : [])
         setItems(Array.isArray(itemsData) ? itemsData.map(toUiItem) : [])
         // NB: do NOT call onSessionRefresh here — /profile already returns the
@@ -1725,48 +1822,6 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
     ? Math.max(0, Math.min(100, Math.round((currentUser.points - currentNiv.seuil) / (nextNiv.seuil - currentNiv.seuil) * 100)))
     : 100
 
-  const saveProfile = async (e) => {
-    e.preventDefault()
-    setSaveMsg('')
-    try {
-      const updated = await fetchJson('/api/visualisation/profile', {
-        method: 'PUT',
-        body: JSON.stringify(profileForm)
-      })
-      setProfile(toUiUser(updated))
-      setSaveMsg('Profil mis à jour ✅')
-      onSessionRefresh?.()
-    } catch (e2) {
-      setSaveMsg(`Erreur: ${e2.message}`)
-    }
-  }
-
-  const uploadProfilePhoto = async (file) => {
-    if (!file) return
-    setSaveMsg('')
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const response = await fetch(toApiUrl('/api/visualisation/profile/photo'), {
-        method: 'POST',
-        credentials: 'include',
-        body: fd
-      })
-      const text = await response.text()
-      const payload = text ? JSON.parse(text) : null
-      if (!response.ok) {
-        const message = payload?.message || payload?.error || `HTTP ${response.status}`
-        throw new Error(message)
-      }
-      const updated = toUiUser(payload)
-      setProfile(updated)
-      setSaveMsg('Photo profil mise à jour ✅')
-      onSessionRefresh?.()
-    } catch (e) {
-      setSaveMsg(`Erreur: ${e.message}`)
-    }
-  }
-
   return (
     <div className="rise">
       <div style={{ marginBottom:28 }}>
@@ -1782,21 +1837,7 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
         <div style={{ position:'absolute', top:-50, right:-50, width:200, height:200, borderRadius:'50%', background:`radial-gradient(circle, ${t.accent}30, transparent 70%)`, pointerEvents:'none' }}/>
         <div style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:24, alignItems:'center', position:'relative' }}>
           <div>
-            <button
-              type="button"
-              onClick={() => profilePhotoInputRef.current?.click()}
-              title="Cliquer pour changer la photo"
-              style={{ background:'transparent', border:'none', padding:0, cursor:'pointer' }}
-            >
-              <AvatarBadge user={currentUser} size={72} accent={t.accent} />
-            </button>
-            <input
-              ref={profilePhotoInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display:'none' }}
-              onChange={(e) => uploadProfilePhoto(e.target.files?.[0])}
-            />
+            <AvatarBadge user={currentUser} size={72} accent={t.accent} />
           </div>
 
           <div>
@@ -1878,37 +1919,11 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
         {loading ? <p style={{ color:'var(--text-3)' }}>Chargement…</p> : items.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)}/>)}
       </div>
 
-      <form onSubmit={saveProfile} style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
-        <Field label="Photo de profil">
-          <button
-            type="button"
-            onClick={() => profilePhotoInputRef.current?.click()}
-            style={{ ...ctaSec, width:'100%' }}
-          >
-            Choisir une image (ou clique l'avatar en haut)
-          </button>
-        </Field>
-        <Field label="Pseudo"><input value={profileForm.pseudo} onChange={(e) => setProfileForm((p) => ({ ...p, pseudo: e.target.value }))} style={inputStyle}/></Field>
-        <Field label="Téléphone privé"><input value={profileForm.telephonePrive} onChange={(e) => setProfileForm((p) => ({ ...p, telephonePrive: e.target.value }))} style={inputStyle}/></Field>
-        <Field label="Ville"><input value={profileForm.ville} onChange={(e) => setProfileForm((p) => ({ ...p, ville: e.target.value }))} style={inputStyle}/></Field>
-        <Field label="Genre">
-          <select value={profileForm.genre} onChange={(e) => setProfileForm((p) => ({ ...p, genre: e.target.value }))} style={inputStyle}>
-            <option value="">—</option>
-            <option value="HOMME">Homme</option>
-            <option value="FEMME">Femme</option>
-            <option value="AUTRE">Autre</option>
-          </select>
-        </Field>
-        <Field label="Date de naissance">
-          <input type="date" value={profileForm.dateNaissance || ''} onChange={(e) => setProfileForm((p) => ({ ...p, dateNaissance: e.target.value || null }))} style={inputStyle}/>
-        </Field>
-        <div style={{ gridColumn:'span 2' }}><Field label="Bio publique"><input value={profileForm.bioPublique} onChange={(e) => setProfileForm((p) => ({ ...p, bioPublique: e.target.value }))} style={inputStyle}/></Field></div>
-        <div style={{ gridColumn:'span 2' }}><Field label="Adresse privée"><input value={profileForm.adressePrivee} onChange={(e) => setProfileForm((p) => ({ ...p, adressePrivee: e.target.value }))} style={inputStyle}/></Field></div>
-        <div style={{ gridColumn:'span 2', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span style={{ fontSize:12, color: saveMsg.startsWith('Erreur') ? 'var(--red)' : 'var(--text-3)' }}>{saveMsg}</span>
-          <button type="submit" style={{...ctaPri, background:t.accent}}>Enregistrer profil</button>
+      <div style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16 }}>
+        <div style={{ fontSize:12, color:'var(--text-3)' }}>
+          💡 La modification du profil se fait depuis la carte profil en bas à gauche (avatar + nom).
         </div>
-      </form>
+      </div>
     </div>
   );
 }
@@ -3211,6 +3226,7 @@ function App() {
   const [gestionFormSignal, setGestionFormSignal] = useState(0)
   const [scenarios, setScenarios] = useState([])
   const [refreshTick, setRefreshTick] = useState(0)
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false)
   const [toast, setToast] = useState(null) // { kind: 'success'|'error', message: string }
   const canManage = user?.niveauMax === 'Avancé'
   const visiblePages = useMemo(
@@ -3326,6 +3342,13 @@ function App() {
   const handleLogout = async () => {
     await fetchJson('/api/auth/logout', { method: 'POST' })
     setUser(null)
+    setProfileEditorOpen(false)
+  }
+
+  const handleProfileUpdated = (updatedUser, toastMessage) => {
+    setUser(updatedUser)
+    bumpRefresh()
+    if (toastMessage) showToast('success', toastMessage)
   }
 
   const openDetail = (o) => {
@@ -3526,11 +3549,28 @@ function App() {
         <div style={{ marginTop:'auto', padding:'14px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)' }}>
           {user ? (
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <div aria-hidden="true"><AvatarBadge user={user} size={32} accent={t.accent} /></div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
-                <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts</div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setProfileEditorOpen(true)}
+                aria-label="Ouvrir mon profil"
+                style={{
+                  flex:1,
+                  display:'flex',
+                  alignItems:'center',
+                  gap:10,
+                  background:'transparent',
+                  border:'none',
+                  padding:0,
+                  textAlign:'left',
+                  cursor:'pointer'
+                }}
+              >
+                <div aria-hidden="true"><AvatarBadge user={user} size={32} accent={t.accent} /></div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
+                  <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts · cliquer pour profil</div>
+                </div>
+              </button>
               <button type="button" onClick={handleLogout} aria-label="Se déconnecter" style={iconBtn}><Icon name="power" size={12}/></button>
             </div>
           ) : (
@@ -3557,6 +3597,14 @@ function App() {
         onMethodInvoke={invokeMethod}
         onUpdateObjet={updateObjet}
         t={t}
+      />
+
+      <ProfileEditorModal
+        open={profileEditorOpen && Boolean(user)}
+        user={user}
+        onClose={() => setProfileEditorOpen(false)}
+        onUpdated={handleProfileUpdated}
+        accent={t.accent}
       />
 
       {toast && (
