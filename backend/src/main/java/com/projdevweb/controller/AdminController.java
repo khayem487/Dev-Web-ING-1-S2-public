@@ -88,6 +88,14 @@ public class AdminController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Impossible de retirer votre propre rôle admin");
         }
 
+        if (!Boolean.TRUE.equals(request.admin()) && cible.isAdmin()) {
+            long adminCount = utilisateurRepository.countByAdminTrue();
+            if (adminCount <= 1) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Impossible de retirer le dernier admin actif");
+            }
+        }
+
         cible.setAdmin(Boolean.TRUE.equals(request.admin()));
         Utilisateur saved = utilisateurRepository.save(cible);
 

@@ -83,9 +83,9 @@
   - [x] Seeder: compte `admin@demo.local / demo1234`.
 
   ### À finir (hardening + UX)
-  - [ ] Empêcher la révocation du **dernier admin actif**.
-  - [ ] Filtres admin (pending only / approved / rejected) + compteur pending.
-  - [ ] Tri/recherche utilisateurs dans l'écran admin.
+  - [x] Empêcher la révocation du **dernier admin actif**.
+  - [x] Filtres admin (pending only / approved / rejected) + compteur pending.
+  - [x] Tri/recherche utilisateurs dans l'écran admin.
   - [ ] Journal admin plus lisible (motif décision + timestamp + auteur).
 
 - [ ] **Gap list vs repo de référence `cyZ-tech2/SmartHouse`**

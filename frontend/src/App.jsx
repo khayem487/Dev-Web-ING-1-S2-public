@@ -2789,14 +2789,19 @@ function AdminPage({ user, t, onChanged }) {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [statusFilter, setStatusFilter] = useState('PENDING')
+  const [userSearch, setUserSearch] = useState('')
 
-  const load = async () => {
+  const load = async (requestedStatus = statusFilter) => {
     setLoading(true)
     setError('')
     try {
+      const reqQuery = requestedStatus && requestedStatus !== 'ALL'
+        ? `?status=${encodeURIComponent(requestedStatus)}`
+        : ''
       const [usersData, reqData] = await Promise.all([
         fetchJson('/api/admin/utilisateurs'),
-        fetchJson('/api/admin/demandes-suppression')
+        fetchJson(`/api/admin/demandes-suppression${reqQuery}`)
       ])
       setUsers(Array.isArray(usersData) ? usersData.map(toUiUser) : [])
       setRequests(Array.isArray(reqData) ? reqData : [])
@@ -2810,8 +2815,21 @@ function AdminPage({ user, t, onChanged }) {
   }
 
   useEffect(() => {
-    if (user?.admin) load()
-  }, [user?.id, user?.admin])
+    if (user?.admin) load(statusFilter)
+  }, [user?.id, user?.admin, statusFilter])
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase()
+    if (!q) return users
+    return users.filter((u) =>
+      `${u.prenom || ''} ${u.nom || ''} ${u.email || ''} ${u.typeMembre || ''}`.toLowerCase().includes(q)
+    )
+  }, [users, userSearch])
+
+  const pendingCount = useMemo(
+    () => requests.filter((r) => r.status === 'PENDING').length,
+    [requests]
+  )
 
   const decide = async (id, decision) => {
     const note = window.prompt(
@@ -2861,8 +2879,39 @@ function AdminPage({ user, t, onChanged }) {
       {error && <div style={{ color:'var(--red)', fontSize:13 }}>{error}</div>}
       {loading && <div style={{ color:'var(--text-3)', fontSize:12 }}>Chargement...</div>}
 
+      <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, display:'grid', gap:10 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+          <div>
+            <div className="label" style={{ marginBottom:4 }}>Filtre demandes</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStatusFilter(st)}
+                  style={{ ...(statusFilter === st ? ctaPri : ctaSec), background: statusFilter === st ? t.accent : undefined }}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ minWidth:260, flex:1 }}>
+            <div className="label" style={{ marginBottom:4 }}>Recherche utilisateurs</div>
+            <input
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Nom, email, type..."
+              style={{ ...inputStyle, width:'100%' }}
+            />
+          </div>
+        </div>
+      </article>
+
       <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16 }}>
-        <h3 className="display" style={{ fontSize:20, marginBottom:10 }}>Demandes de suppression</h3>
+        <h3 className="display" style={{ fontSize:20, marginBottom:10 }}>
+          Demandes de suppression · <span className="mono" style={{ fontSize:12, color:t.accent }}>{requests.length} (pending: {pendingCount})</span>
+        </h3>
         <div style={{ display:'grid', gap:10 }}>
           {requests.length === 0 && <p style={{ color:'var(--text-3)' }}>Aucune demande.</p>}
           {requests.map((r) => (
@@ -2885,9 +2934,10 @@ function AdminPage({ user, t, onChanged }) {
       </article>
 
       <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16 }}>
-        <h3 className="display" style={{ fontSize:20, marginBottom:10 }}>Utilisateurs</h3>
+        <h3 className="display" style={{ fontSize:20, marginBottom:10 }}>Utilisateurs · {filteredUsers.length}</h3>
         <div style={{ display:'grid', gap:8 }}>
-          {users.map((u) => (
+          {filteredUsers.length === 0 && <p style={{ color:'var(--text-3)', fontSize:12 }}>Aucun utilisateur pour ce filtre.</p>}
+          {filteredUsers.map((u) => (
             <div key={u.id} style={{ border:'1px solid var(--line)', borderRadius:10, padding:12, background:'var(--bg-2)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10 }}>
               <div>
                 <div style={{ fontSize:13, color:'var(--text)' }}>{u.prenom} {u.nom} · {u.email}</div>
