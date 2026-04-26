@@ -1621,7 +1621,7 @@ function AvatarBadge({ user, size = 48, accent = 'var(--accent)' }) {
 }
 
 /* ─── LOGIN / VISUALISATION ─────────────── */
-function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSessionRefresh, openDetail, t }) {
+function VisualisationPage({ user, pieces, onLogin, onRegister, onVerifyEmail, onResendVerification, onLogout, onSessionRefresh, openDetail, t }) {
   const [filters, setFilters] = useState({ service:'', etat:'', pieceId:'', q:'' });
   const [profile, setProfile] = useState(user);
   const [services, setServices] = useState([]);
@@ -1704,7 +1704,15 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
   }, [user?.id, filters.service, filters.etat, filters.pieceId, filters.q])
 
   if (!user) {
-    return <LoginScreen onLogin={onLogin} onRegister={onRegister} t={t} />
+    return (
+      <LoginScreen
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onVerifyEmail={onVerifyEmail}
+        onResendVerification={onResendVerification}
+        t={t}
+      />
+    )
   }
 
   const currentUser = profile || user
@@ -1885,12 +1893,14 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
   );
 }
 
-function LoginScreen({ onLogin, onRegister, t }) {
+function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification, t }) {
   const [tab, setTab] = useState('login');
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [verifyMsg, setVerifyMsg] = useState('')
   const [loginForm, setLoginForm] = useState({ email: 'parent@demo.local', motDePasse: 'demo1234' })
   const [registerForm, setRegisterForm] = useState({ prenom:'', nom:'', email:'', motDePasse:'', typeMembre:'PARENT_FAMILLE' })
+  const [verifyForm, setVerifyForm] = useState({ email: '', token: '' })
 
   const runLogin = async (email, motDePasse) => {
     setLoading(true)
@@ -1898,7 +1908,13 @@ function LoginScreen({ onLogin, onRegister, t }) {
     try {
       await onLogin({ email, motDePasse })
     } catch (e) {
-      setError(e.message || 'Connexion impossible')
+      const message = e.message || 'Connexion impossible'
+      setError(message)
+      if (message.toLowerCase().includes('email non vérifié') || message.toLowerCase().includes('non vérifi')) {
+        setTab('verify')
+        setVerifyForm((f) => ({ ...f, email }))
+        setVerifyMsg('Ton compte doit être vérifié avant connexion.')
+      }
     } finally {
       setLoading(false)
     }
@@ -1907,10 +1923,47 @@ function LoginScreen({ onLogin, onRegister, t }) {
   const runRegister = async () => {
     setLoading(true)
     setError('')
+    setVerifyMsg('')
     try {
-      await onRegister(registerForm)
+      const result = await onRegister(registerForm)
+      if (result?.verificationRequired) {
+        setTab('verify')
+        setVerifyForm({ email: result.email || registerForm.email, token: result.debugToken || '' })
+        setVerifyMsg(result.debugToken
+          ? `Compte créé. Code de vérification (dev): ${result.debugToken}`
+          : 'Compte créé. Entre le code reçu par email.')
+      }
     } catch (e) {
       setError(e.message || 'Inscription impossible')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runVerify = async () => {
+    setLoading(true)
+    setError('')
+    setVerifyMsg('')
+    try {
+      await onVerifyEmail(verifyForm)
+      setVerifyMsg('Email vérifié ✅ Connexion active.')
+    } catch (e) {
+      setError(e.message || 'Vérification impossible')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runResend = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await onResendVerification(verifyForm.email)
+      setVerifyMsg(data?.debugToken
+        ? `Nouveau code (dev): ${data.debugToken}`
+        : 'Code renvoyé (si le compte existe et n\'est pas vérifié).')
+    } catch (e) {
+      setError(e.message || 'Renvoi impossible')
     } finally {
       setLoading(false)
     }
@@ -1952,13 +2005,17 @@ function LoginScreen({ onLogin, onRegister, t }) {
 
       <div style={{ borderRadius:18, padding:'32px', background:'var(--surface)', border:'1px solid var(--line)' }}>
         <div style={{ display:'flex', gap:4, padding:4, background:'var(--bg-2)', borderRadius:10, marginBottom:24 }}>
-          {['login','register'].map(k => (
-            <button key={k} onClick={()=>setTab(k)} style={{
+          {[
+            { key:'login', label:'Connexion' },
+            { key:'register', label:'Inscription' },
+            { key:'verify', label:'Vérifier' }
+          ].map(({ key, label }) => (
+            <button key={key} onClick={()=>setTab(key)} style={{
               flex:1, padding:'9px', borderRadius:8, fontSize:13, fontWeight:500,
-              background: tab===k ? 'var(--surface)' : 'transparent',
-              color: tab===k ? 'var(--text)' : 'var(--text-3)',
+              background: tab===key ? 'var(--surface)' : 'transparent',
+              color: tab===key ? 'var(--text)' : 'var(--text-3)',
               transition:'all .15s',
-            }}>{k==='login' ? 'Connexion' : 'Inscription'}</button>
+            }}>{label}</button>
           ))}
         </div>
 
@@ -1978,7 +2035,7 @@ function LoginScreen({ onLogin, onRegister, t }) {
               </button>
             </div>
           </form>
-        ) : (
+        ) : tab==='register' ? (
           <form onSubmit={(e)=>{ e.preventDefault(); runRegister() }}>
             <h3 className="display" style={{ fontSize:26, marginBottom:24 }}>Créer un compte.</h3>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
@@ -1994,8 +2051,25 @@ function LoginScreen({ onLogin, onRegister, t }) {
                 </select>
               </Field>
             </div>
-            {error && <div style={{ color:'var(--red)', fontSize:12, marginTop:10 }}>{error}</div>}
+            {(error || verifyMsg) && <div style={{ color:error ? 'var(--red)' : 'var(--text-3)', fontSize:12, marginTop:10 }}>{error || verifyMsg}</div>}
             <button disabled={loading} style={{ marginTop:20, width:'100%', padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600 }}>{loading ? 'Création...' : 'Créer mon compte'}</button>
+          </form>
+        ) : (
+          <form onSubmit={(e)=>{ e.preventDefault(); runVerify() }}>
+            <h3 className="display" style={{ fontSize:26, marginBottom:24 }}>Vérifier mon email</h3>
+            <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <Field label="Email">
+                <input type="email" value={verifyForm.email} onChange={(e)=>setVerifyForm((f)=>({ ...f, email: e.target.value }))} style={inputStyle}/>
+              </Field>
+              <Field label="Code de vérification">
+                <input value={verifyForm.token} onChange={(e)=>setVerifyForm((f)=>({ ...f, token: e.target.value }))} style={inputStyle} placeholder="Code à 6 chiffres"/>
+              </Field>
+              {(error || verifyMsg) && <div style={{ color:error ? 'var(--red)' : 'var(--text-3)', fontSize:12 }}>{error || verifyMsg}</div>}
+              <div style={{ display:'flex', gap:8 }}>
+                <button disabled={loading} type="submit" style={{ ...ctaPri, background:t.accent, flex:1 }}>{loading ? 'Vérification...' : 'Valider le code'}</button>
+                <button disabled={loading || !verifyForm.email} type="button" onClick={runResend} style={{ ...ctaSec }}>Renvoyer</button>
+              </div>
+            </div>
           </form>
         )}
       </div>
@@ -3190,7 +3264,33 @@ function App() {
       method: 'POST',
       body: JSON.stringify(payload)
     })
+    if (data?.verificationRequired) {
+      return {
+        verificationRequired: true,
+        email: data.email,
+        debugToken: data.debugToken,
+      }
+    }
+
+    const profile = data?.user ?? data
+    setUser(toUiUser(profile))
+    return { verificationRequired: false }
+  }
+
+  const handleVerifyEmail = async ({ email, token }) => {
+    const data = await fetchJson('/api/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, token })
+    })
     setUser(toUiUser(data))
+    return data
+  }
+
+  const handleResendVerification = async (email) => {
+    return fetchJson('/api/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    })
   }
 
   const handleLogout = async () => {
@@ -3303,6 +3403,8 @@ function App() {
         {...props}
         onLogin={handleLogin}
         onRegister={handleRegister}
+        onVerifyEmail={handleVerifyEmail}
+        onResendVerification={handleResendVerification}
         onLogout={handleLogout}
         onSessionRefresh={refreshSession}
       />

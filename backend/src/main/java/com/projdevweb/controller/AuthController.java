@@ -1,7 +1,10 @@
 package com.projdevweb.controller;
 
 import com.projdevweb.dto.AuthLoginRequest;
+import com.projdevweb.dto.AuthRegisterResponse;
+import com.projdevweb.dto.AuthResendVerificationRequest;
 import com.projdevweb.dto.AuthRegisterRequest;
+import com.projdevweb.dto.AuthVerifyEmailRequest;
 import com.projdevweb.dto.UserProfileDTO;
 import com.projdevweb.model.Enfant;
 import com.projdevweb.model.ParentFamille;
@@ -22,12 +25,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final SecureRandom RNG = new SecureRandom();
 
     private final UtilisateurRepository utilisateurRepository;
     private final SessionUtilisateurService sessionUtilisateurService;
@@ -45,7 +52,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public UserProfileDTO register(@Valid @RequestBody AuthRegisterRequest request, HttpSession session) {
+    public AuthRegisterResponse register(@Valid @RequestBody AuthRegisterRequest request, HttpSession session) {
         String emailNorm = request.email().trim().toLowerCase(Locale.ROOT);
         if (utilisateurRepository.existsByEmailIgnoreCase(emailNorm)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Un compte avec cet email existe déjà");
@@ -59,11 +66,23 @@ public class AuthController {
                 emailNorm,
                 hash);
 
+        boolean verificationRequired = !emailNorm.endsWith("@demo.local");
+        if (verificationRequired) {
+            utilisateur.setEmailVerifie(false);
+            utilisateur.setEmailVerificationToken(generateVerificationToken());
+            utilisateur.setEmailVerificationExpireAt(Instant.now().plusSeconds(24 * 3600));
+            Utilisateur saved = utilisateurRepository.save(utilisateur);
+            return AuthRegisterResponse.pending(saved.getEmail(), saved.getEmailVerificationToken());
+        }
+
+        utilisateur.setEmailVerifie(true);
+        utilisateur.setEmailVerificationToken(null);
+        utilisateur.setEmailVerificationExpireAt(null);
+
         Utilisateur saved = utilisateurRepository.save(utilisateur);
-        // Connexion immédiate après inscription
         Utilisateur withLogin = pointsService.recordLogin(saved);
         sessionUtilisateurService.login(session, withLogin);
-        return UserProfileDTO.from(withLogin);
+        return AuthRegisterResponse.verified(UserProfileDTO.from(withLogin));
     }
 
     @PostMapping("/login")
@@ -75,9 +94,68 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Email ou mot de passe invalide");
         }
 
+        if (!utilisateur.isEmailVerifie()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Email non vérifié. Valide le code de vérification avant connexion.");
+        }
+
         Utilisateur withLogin = pointsService.recordLogin(utilisateur);
         sessionUtilisateurService.login(session, withLogin);
         return UserProfileDTO.from(withLogin);
+    }
+
+    @PostMapping("/verify-email")
+    public UserProfileDTO verifyEmail(@Valid @RequestBody AuthVerifyEmailRequest request,
+                                      HttpSession session) {
+        String emailNorm = request.email().trim().toLowerCase(Locale.ROOT);
+        Utilisateur utilisateur = utilisateurRepository.findByEmailIgnoreCase(emailNorm)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compte introuvable"));
+
+        if (utilisateur.isEmailVerifie()) {
+            Utilisateur withLogin = pointsService.recordLogin(utilisateur);
+            sessionUtilisateurService.login(session, withLogin);
+            return UserProfileDTO.from(withLogin);
+        }
+
+        if (utilisateur.getEmailVerificationToken() == null
+                || utilisateur.getEmailVerificationExpireAt() == null
+                || Instant.now().isAfter(utilisateur.getEmailVerificationExpireAt())
+                || !utilisateur.getEmailVerificationToken().equals(request.token().trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Code de vérification invalide ou expiré");
+        }
+
+        utilisateur.setEmailVerifie(true);
+        utilisateur.setEmailVerificationToken(null);
+        utilisateur.setEmailVerificationExpireAt(null);
+
+        Utilisateur saved = utilisateurRepository.save(utilisateur);
+        Utilisateur withLogin = pointsService.recordLogin(saved);
+        sessionUtilisateurService.login(session, withLogin);
+        return UserProfileDTO.from(withLogin);
+    }
+
+    @PostMapping("/resend-verification")
+    public Map<String, Object> resendVerification(@Valid @RequestBody AuthResendVerificationRequest request) {
+        String emailNorm = request.email().trim().toLowerCase(Locale.ROOT);
+        Utilisateur utilisateur = utilisateurRepository.findByEmailIgnoreCase(emailNorm)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compte introuvable"));
+
+        if (utilisateur.isEmailVerifie()) {
+            return Map.of("ok", true, "alreadyVerified", true);
+        }
+
+        String token = generateVerificationToken();
+        utilisateur.setEmailVerificationToken(token);
+        utilisateur.setEmailVerificationExpireAt(Instant.now().plusSeconds(24 * 3600));
+        utilisateurRepository.save(utilisateur);
+
+        return Map.of(
+                "ok", true,
+                "alreadyVerified", false,
+                "email", utilisateur.getEmail(),
+                "debugToken", token,
+                "expiresAt", utilisateur.getEmailVerificationExpireAt()
+        );
     }
 
     @PostMapping("/logout")
@@ -114,5 +192,10 @@ public class AuthController {
             case PARENT_FAMILLE -> new ParentFamille(prenom, nom, email, hash);
             case VOISIN_VISITEUR -> new VoisinVisiteur(prenom, nom, email, hash);
         };
+    }
+
+    private static String generateVerificationToken() {
+        int token = 100000 + RNG.nextInt(900000);
+        return String.valueOf(token);
     }
 }

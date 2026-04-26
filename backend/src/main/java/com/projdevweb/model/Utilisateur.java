@@ -68,6 +68,14 @@ public abstract class Utilisateur {
     @Column(length = 120)
     private String ville;
 
+    @Column(nullable = false)
+    private Boolean emailVerifie = true;
+
+    @Column(length = 32)
+    private String emailVerificationToken;
+
+    private Instant emailVerificationExpireAt;
+
     @Lob
     @Column(columnDefinition = "CLOB")
     private String photoDataUrl;
@@ -234,6 +242,30 @@ public abstract class Utilisateur {
 
     public void setPhotoDataUrl(String photoDataUrl) {
         this.photoDataUrl = photoDataUrl;
+    }
+
+    public boolean isEmailVerifie() {
+        return Boolean.TRUE.equals(emailVerifie);
+    }
+
+    public void setEmailVerifie(Boolean emailVerifie) {
+        this.emailVerifie = Boolean.TRUE.equals(emailVerifie);
+    }
+
+    public String getEmailVerificationToken() {
+        return emailVerificationToken;
+    }
+
+    public void setEmailVerificationToken(String emailVerificationToken) {
+        this.emailVerificationToken = emailVerificationToken;
+    }
+
+    public Instant getEmailVerificationExpireAt() {
+        return emailVerificationExpireAt;
+    }
+
+    public void setEmailVerificationExpireAt(Instant emailVerificationExpireAt) {
+        this.emailVerificationExpireAt = emailVerificationExpireAt;
     }
 
     public Float getPoints() {

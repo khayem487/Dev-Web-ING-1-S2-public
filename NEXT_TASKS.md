@@ -92,7 +92,11 @@
   - [x] Upload photo profil.
     - `POST /api/visualisation/profile/photo` (multipart, max 2MB)
     - stockage `photoDataUrl` en base + avatar image rendu front
-  - [ ] Validation email/token à l'inscription.
+  - [x] Validation email/token à l'inscription.
+    - `POST /api/auth/register` retourne mode `verificationRequired` pour email non-demo
+    - `POST /api/auth/verify-email` (email + code)
+    - `POST /api/auth/resend-verification` (nouveau code)
+    - login bloqué tant que l'email n'est pas vérifié
   - [x] Page maintenance dédiée (objets à réparer + action "marquer réparé").
     - endpoint `GET /api/gestion/maintenance`
     - action `POST /api/gestion/objets/{id}/maintenance/reparer`

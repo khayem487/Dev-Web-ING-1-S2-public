@@ -182,6 +182,7 @@ public class DataSeeder implements CommandLineRunner {
                 admin.addPoints(15f);
                 admin.incrementNbConnexions();
                 admin.setAdmin(true);
+                admin.setEmailVerifie(true);
                 utilisateurRepository.save(admin);
             }
             return;
@@ -192,22 +193,26 @@ public class DataSeeder implements CommandLineRunner {
         ParentFamille parent = new ParentFamille("Camille", "Martin", "parent@demo.local", hash);
         parent.addPoints(12f);          // ≥10 → AVANCE
         parent.incrementNbConnexions();
+        parent.setEmailVerifie(true);
 
         // Admin (compte de supervision)
         ParentFamille admin = new ParentFamille("Admin", "Maison", "admin@demo.local", hash);
         admin.addPoints(15f);
         admin.incrementNbConnexions();
         admin.setAdmin(true);
+        admin.setEmailVerifie(true);
 
         // Enfant — niveau Débutant au démarrage (max INTERMEDIAIRE)
         Enfant enfant = new Enfant("Lou", "Martin", "enfant@demo.local", hash);
         enfant.addPoints(1.5f);          // < 3 → DEBUTANT
         enfant.incrementNbConnexions();
+        enfant.setEmailVerifie(true);
 
         // VoisinVisiteur — visiteur, capé à DEBUTANT
         VoisinVisiteur voisin = new VoisinVisiteur("Sam", "Voisin", "voisin@demo.local", hash);
         voisin.addPoints(0.5f);
         voisin.incrementNbConnexions();
+        voisin.setEmailVerifie(true);
 
         utilisateurRepository.saveAll(List.of(parent, enfant, voisin, admin));
     }
