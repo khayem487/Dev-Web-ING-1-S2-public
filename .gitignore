@@ -55,3 +55,8 @@ data/
 *.mv.db
 *.trace.db
 *.lock.db
+
+### Local dev runtime logs (mvn / vite stdout/stderr captures) ###
+*.log
+local-backend.*.log
+local-frontend.*.log
