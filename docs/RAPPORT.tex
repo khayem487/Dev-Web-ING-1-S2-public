@@ -11,6 +11,8 @@
 \usepackage{longtable}
 \usepackage{xcolor}
 \usepackage{fancyvrb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
 
 \geometry{margin=2.2cm}
 \hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
@@ -110,7 +112,7 @@ Le projet répond aux contraintes principales du cahier des charges :
 
 Nous avons appliqué une démarche itérative inspirée de \textbf{SCRUM} :
 \begin{itemize}
-  \item backlog priorisé (fichiers \texttt{PLAN.md} et \texttt{NEXT\_TASKS.md}),
+  \item backlog priorisé et révision régulière des priorités,
   \item livraisons incrémentales,
   \item vérifications régulières (builds, tests de parcours, smoke test).
 \end{itemize}
@@ -222,91 +224,131 @@ Qualité, déploiement, rapport &   &   &   &   & X & X \\
 
 \section{UML amélioré}
 
-\subsection{Structure conceptuelle}
-Le modèle UML a été enrichi pour couvrir les familles d'objets connectés demandées,
-avec héritage et spécialisations métier.
+\subsection{Schéma UML global (détaillé)}
 
-\begin{longtable}{|p{4.2cm}|p{10.4cm}|}
-\hline
-\textbf{Bloc UML} & \textbf{Rôle} \\
-\hline
-Maison -- Pièce & Une maison possède plusieurs pièces (Salon, Cuisine, Chambre, etc.) \\
-\hline
-ObjetConnecte (abstrait) & Racine commune (nom, état, connectivité, batterie, maintenance, pièce) \\
-\hline
-Branches ObjetConnecte & Ouvrant, Capteur, Appareil, BesoinAnimal \\
-\hline
-Feuilles métier & Exemples : Porte, Volet, Thermostat, Camera, DetecteurMouvement, LaveLinge, Alarme, Aspirateur, MachineCafe, Nourriture, Eau \\
-\hline
-Utilisateur (abstrait) & ParentFamille, Enfant, VoisinVisiteur + attributs de niveau/points/admin \\
-\hline
-HistoriqueAction & Trace les actions utilisateur sur les objets \\
-\hline
-Scenario + ScenarioAction & Automatisation (manuel/planifié/conditionnel) \\
-\hline
-DemandeSuppression & Workflow de suppression validé par admin \\
-\hline
-\end{longtable}
+Le schéma suivant représente la structure orientée objet retenue (héritage, agrégation et associations métier).
 
-\subsection{Cardinalités clés}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=7mm and 8mm,
+  box/.style={draw, rounded corners, align=center, font=\scriptsize, text width=2.8cm, minimum height=9mm},
+  rel/.style={-Latex, thin}
+]
+\node[box] (maison) {\textbf{Maison}\\id, nom};
+\node[box, below=of maison] (piece) {\textbf{Piece}\\id, nom, surface};
+
+\node[box, right=26mm of piece] (objet) {\textbf{ObjetConnecte} (abstrait)\\id, nom, etat, connectivite, batterie, derniereMaintenance};
+\node[box, above right=of objet] (capteur) {\textbf{Capteur}};
+\node[box, right=of objet] (appareil) {\textbf{Appareil}};
+\node[box, below right=of objet] (ouvrant) {\textbf{Ouvrant}};
+\node[box, below=of appareil] (animal) {\textbf{BesoinAnimal}};
+
+\node[box, right=22mm of capteur] (camera) {Camera\\Thermostat\\DetecteurMouvement};
+\node[box, right=22mm of appareil] (machines) {Aspirateur\\LaveLinge\\MachineCafe\\Alarme\\...};
+\node[box, right=22mm of animal] (eaufood) {Eau\\Nourriture};
+\node[box, right=22mm of ouvrant] (ouvertures) {Porte\\Volet\\Fenetre\\PorteGarage};
+
+\node[box, below=20mm of piece] (user) {\textbf{Utilisateur} (abstrait)\\id, email, points, niveau, admin};
+\node[box, right=of user] (roles) {ParentFamille\\Enfant\\VoisinVisiteur};
+
+\node[box, below=of user] (hist) {\textbf{HistoriqueAction}\\id, actionType, timestamp};
+\node[box, right=of hist] (demande) {\textbf{DemandeSuppression}\\id, statut, motif};
+\node[box, right=of demande] (scenario) {\textbf{Scenario}\\id, type, cron, enabled};
+\node[box, above=of scenario] (scenarioAction) {\textbf{ScenarioAction}\\targetEtat, targetPosition};
+
+\draw[rel] (maison) -- node[left,font=\tiny]{1..N} (piece);
+\draw[rel] (piece) -- node[above,font=\tiny]{1..N} (objet);
+
+\draw[rel] (objet) -- (capteur);
+\draw[rel] (objet) -- (appareil);
+\draw[rel] (objet) -- (ouvrant);
+\draw[rel] (objet) -- (animal);
+
+\draw[rel] (capteur) -- (camera);
+\draw[rel] (appareil) -- (machines);
+\draw[rel] (animal) -- (eaufood);
+\draw[rel] (ouvrant) -- (ouvertures);
+
+\draw[rel] (user) -- (roles);
+\draw[rel] (user) -- node[left,font=\tiny]{1..N} (hist);
+\draw[rel] (objet) |- node[pos=0.85,right,font=\tiny]{1..N} (hist.east);
+\draw[rel] (user) -- node[above,font=\tiny]{1..N} (demande);
+\draw[rel] (scenario) -- node[right,font=\tiny]{1..N} (scenarioAction);
+\draw[rel] (objet) |- node[pos=0.8,above,font=\tiny]{cible} (scenarioAction.west);
+\end{tikzpicture}
+\caption{Schéma UML global de la plateforme Maison Intelligente.}
+\end{figure}
+
+\subsection{Cardinalités clés et règles métier}
 \begin{itemize}
-  \item 1 Maison -- N Pièces
-  \item 1 Pièce -- N ObjetsConnectés
-  \item 1 Utilisateur -- N HistoriqueAction
-  \item 1 ObjetConnecte -- N HistoriqueAction
-  \item 1 Scenario -- N ScenarioAction
-  \item 1 Utilisateur -- N DemandeSuppression
+  \item Une \texttt{Maison} contient plusieurs \texttt{Piece}.
+  \item Une \texttt{Piece} contient plusieurs \texttt{ObjetConnecte}.
+  \item Un \texttt{Utilisateur} possède plusieurs entrées d'\texttt{HistoriqueAction}.
+  \item Un \texttt{ObjetConnecte} est référencé dans l'historique et dans les \texttt{ScenarioAction}.
+  \item Un \texttt{Scenario} possède plusieurs \texttt{ScenarioAction}.
+  \item Une \texttt{DemandeSuppression} est initiée par un utilisateur et traitée côté administration.
 \end{itemize}
 
 \section{Schéma de base de données amélioré}
 
-\subsection{Choix de modélisation relationnelle}
+\subsection{Schéma relationnel (vue synthétique)}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=8mm and 8mm,
+  db/.style={draw, rounded corners, align=left, font=\scriptsize, text width=3.7cm, inner sep=3pt},
+  fk/.style={-Latex, thin}
+]
+\node[db] (maisondb) {\textbf{maison}\\PK id\\nom};
+\node[db, below=of maisondb] (piecedb) {\textbf{piece}\\PK id\\FK maison\_id\\nom, surface, type};
+
+\node[db, right=of piecedb] (objetdb) {\textbf{objet\_connecte}\\PK id\\FK piece\_id\\type\_objet\\etat, connectivite\\batterie, maintenance\\colonnes spécialisées};
+\node[db, above=of objetdb] (userdb) {\textbf{utilisateur}\\PK id\\email (unique)\\type\_membre, points\\niveau, admin};
+\node[db, right=of objetdb] (histdb) {\textbf{historique\_action}\\PK id\\FK utilisateur\_id\\FK objet\_id\\action\_type, timestamp};
+
+\node[db, below=of objetdb] (scenariodb) {\textbf{scenario}\\PK id\\type, cron, enabled\\trigger\_event, trigger\_objet\_id};
+\node[db, right=of scenariodb] (scenarioActiondb) {\textbf{scenario\_action}\\PK id\\FK scenario\_id\\FK objet\_id\\target\_etat, target\_position};
+\node[db, below=of userdb] (demandedb) {\textbf{demande\_suppression}\\PK id\\FK utilisateur\_id\\FK objet\_id\\statut, motif, timestamp};
+\node[db, below=of piecedb] (capteurdb) {\textbf{donnee\_capteur}\\PK id\\FK objet\_id\\valeur, unite, timestamp};
+
+\draw[fk] (maisondb) -- (piecedb);
+\draw[fk] (piecedb) -- (objetdb);
+\draw[fk] (userdb) -- (histdb);
+\draw[fk] (objetdb) -- (histdb);
+\draw[fk] (userdb) -- (demandedb);
+\draw[fk] (objetdb) -- (demandedb);
+\draw[fk] (scenariodb) -- (scenarioActiondb);
+\draw[fk] (objetdb) -- (scenarioActiondb);
+\draw[fk] (objetdb) -- (capteurdb);
+\end{tikzpicture}
+\caption{Schéma relationnel principal (PK/FK) de la base de données.}
+\end{figure}
+
+\subsection{Choix de modélisation}
 \begin{itemize}
-  \item Stratégie d'héritage \texttt{SINGLE\_TABLE} pour \texttt{ObjetConnecte} et \texttt{Utilisateur}.
+  \item Stratégie d'héritage \texttt{SINGLE\_TABLE} pour \texttt{objet\_connecte} et \texttt{utilisateur}.
   \item Clés techniques auto-générées (\texttt{id} bigint).
-  \item Clés étrangères explicites pour garantir l'intégrité référentielle.
+  \item Clés étrangères explicites pour l'intégrité référentielle.
 \end{itemize}
 
-\subsection{Tables principales}
-
-\begin{longtable}{|p{3.1cm}|p{3.6cm}|p{7.8cm}|}
-\hline
-\textbf{Table} & \textbf{Clé primaire} & \textbf{Contenu principal} \\
-\hline
-maison & id & Nom de la maison \\
-\hline
-piece & id & Pièces + FK vers maison \\
-\hline
-utilisateur & id & Profil, points, niveau, rôle admin, type membre \\
-\hline
-objet\_connecte & id & Données communes + colonnes spécialisées par type \\
-\hline
-historique\_action & id & Action, timestamp, FK utilisateur, FK objet \\
-\hline
-donnee\_capteur & id & Série temporelle de mesures capteurs \\
-\hline
-scenario & id & Définition scénario, type, trigger, activation \\
-\hline
-scenario\_action & id & Actions élémentaires d'un scénario, FK scénario, FK objet \\
-\hline
-demande\_suppression & id & Workflow de demande suppression + statut + auteur \\
-\hline
-\end{longtable}
-
-\subsection{Améliorations proposées du schéma}
+\subsection{Optimisations proposées}
 \begin{enumerate}
-  \item Indexer les colonnes de recherche fréquentes :
+  \item Indexation :
   \begin{itemize}
     \item \texttt{objet\_connecte(type\_objet, piece\_id, etat, marque)}
     \item \texttt{historique\_action(utilisateur\_id, objet\_id, timestamp)}
     \item \texttt{scenario(enabled, type, trigger\_event)}
   \end{itemize}
-  \item Contraintes d'unicité utiles :
+  \item Contraintes d'unicité :
   \begin{itemize}
-    \item \texttt{utilisateur.email} unique,
-    \item éventuellement \texttt{objet\_connecte(nom, piece\_id)} unique selon règle métier.
+    \item \texttt{utilisateur.email} unique
+    \item \texttt{objet\_connecte(nom, piece\_id)} selon règle métier
   \end{itemize}
-  \item Journaliser les exports/administrations sensibles dans \texttt{historique\_action}.
+  \item Journalisation renforcée des actions sensibles (exports, actions admin, maintenance).
 \end{enumerate}
 
 \section{Tests, performance, responsive, accessibilité}
