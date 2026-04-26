@@ -1,65 +1,99 @@
-# Dev Web ING1 — Maison Intelligente
+# Maison Intelligente - Dev Web ING1
 
-Smart-home project (Spring Boot + React/Vite) with modules:
-- Information
-- Visualisation
-- Gestion
-- Administration
+Plateforme smart-home complete (backend Spring Boot + frontend React/Vite) pour la soutenance ING1.
 
----
+## Fonctionnalites
 
-## Stack
-- Backend: Java 21, Spring Boot, Spring Data JPA
-- Frontend: React + Vite
-- DB:
-  - default local: H2 file (`./data/maison-db`)
-  - production-like local: MySQL 8 (Docker)
+- Module **Information** (public): pieces, objets, recherche multi-filtres.
+- Module **Visualisation** (membre): inscription/connexion, profil, points/niveaux, services.
+- Module **Gestion** (niveau avance): CRUD objets, etat, parametres, maintenance, exports CSV.
+- Module **Administration** (admin): gestion des demandes de suppression, gestion des roles admin.
+- **Scenarios domotiques** manuels/programmes (cron) + execution rapide depuis l'UI.
+- Couverture etendue des types d'objets (ouvrants, capteurs, appareils, besoins animaux).
 
----
+## Stack technique
 
-## Quick start (recommended = MySQL)
+- Backend: Java 21, Spring Boot 3.3, Spring Data JPA, Validation
+- Frontend: React 19, Vite, CSS custom
+- Base de donnees:
+  - Defaut: H2 fichier (`./data/maison-db`)
+  - Option production locale: MySQL 8 via Docker
 
-### 1) Start MySQL (Docker)
+## Prerequis
+
+- Java 21
+- Maven 3.9+
+- Node.js 20+ et npm
+- Docker (optionnel, pour MySQL)
+
+## Demarrage rapide (H2, zero config)
+
+### 1) Backend
+
 ```bash
-docker compose -f docker-compose.mysql.yml up -d
+mvn spring-boot:run
 ```
 
-MySQL defaults in compose:
-- host: `127.0.0.1`
-- port: `3307`
-- db: `maison_intelligente`
-- user: `maison`
-- pass: `maison123`
+Backend: [http://localhost:8080](http://localhost:8080)  
+Health: [http://localhost:8080/api/health](http://localhost:8080/api/health)
 
-### 2) Start backend on MySQL profile
-```bash
-mvn spring-boot:run "-Dspring-boot.run.profiles=mysql"
-```
+### 2) Frontend
 
-Backend URL: `http://localhost:8080`
-Health: `http://localhost:8080/api/health`
-
-### 3) Start frontend
 ```bash
 cd frontend
 npm install
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-Frontend URL: `http://localhost:5173`
+Frontend: [http://localhost:5173](http://localhost:5173)
 
----
+## Demarrage MySQL (recommande pour demo "base SQL reelle")
 
-## Demo accounts
+### 1) Lancer MySQL
+
+```bash
+docker compose -f docker-compose.mysql.yml up -d
+```
+
+### 2) Lancer le backend avec profil mysql
+
+```bash
+mvn spring-boot:run "-Dspring-boot.run.profiles=mysql"
+```
+
+### 3) Lancer le frontend
+
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+## Comptes de demo
+
 - `admin@demo.local / demo1234`
 - `parent@demo.local / demo1234`
 - `enfant@demo.local / demo1234`
 - `voisin@demo.local / demo1234`
 
----
+## Build de verification
 
-## DB configuration env vars
-The app now reads DB config from `APP_*` vars (to avoid broken empty `SPRING_DATASOURCE_URL` env side effects):
+### Backend
+
+```bash
+mvn -DskipTests package
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+```
+
+## Variables d'environnement importantes
+
+Le backend lit la config DB via `APP_*`:
 
 - `APP_DATASOURCE_URL`
 - `APP_DATASOURCE_DRIVER`
@@ -67,24 +101,39 @@ The app now reads DB config from `APP_*` vars (to avoid broken empty `SPRING_DAT
 - `APP_DATASOURCE_PASSWORD`
 - `APP_JPA_DIALECT`
 
-If not set, fallback is H2 file.
+Autres flags:
 
----
+- `APP_AUTH_EMAIL_VERIFICATION_ENABLED` (`false` par defaut en dev)
+- `APP_SCHEDULER_ENABLED` (`true` par defaut)
 
-## Useful commands
+## Structure du repo
 
-Build backend:
+- `backend/` : API Spring Boot, modeles JPA, services, controllers
+- `frontend/` : application React
+- `docs/` : script de demo et artefacts rapport
+- `docker-compose.mysql.yml` : stack MySQL locale
+- `render.yaml` + `Dockerfile` : deploiement
+
+## Endpoints principaux
+
+- Public: `/api/health`, `/api/info/*`
+- Auth: `/api/auth/*`
+- Visualisation: `/api/visualisation/*`
+- Gestion: `/api/gestion/*`, `/api/gestion/scenarios/*`
+- Admin: `/api/admin/*`
+
+## Commandes Git (commit + push)
+
 ```bash
-mvn -DskipTests package
+git add -A
+git commit -m "feat: prepare project for presentation"
+git push origin main
 ```
 
-Build frontend:
-```bash
-cd frontend
-npm run build
-```
+## Etat actuel
 
-Stop MySQL stack:
-```bash
-docker compose -f docker-compose.mysql.yml down
-```
+Le projet est prepare pour la presentation avec:
+- stack conforme (Spring Boot + React)
+- base SQL fonctionnelle
+- scenarios + admin + maintenance + exports
+- README de run/demo centralise

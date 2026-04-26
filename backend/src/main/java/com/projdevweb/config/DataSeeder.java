@@ -8,27 +8,34 @@ import com.projdevweb.model.Connectivite;
 import com.projdevweb.model.Cuisine;
 import com.projdevweb.model.DonneeCapteur;
 import com.projdevweb.model.Alarme;
+import com.projdevweb.model.Arrosage;
 import com.projdevweb.model.Aspirateur;
 import com.projdevweb.model.Climatiseur;
 import com.projdevweb.model.DetecteurMouvement;
 import com.projdevweb.model.Eau;
+import com.projdevweb.model.Enceinte;
 import com.projdevweb.model.Fenetre;
 import com.projdevweb.model.Enfant;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.Garage;
 import com.projdevweb.model.HistoriqueAction;
 import com.projdevweb.model.LaveLinge;
+import com.projdevweb.model.LaveVaisselle;
 import com.projdevweb.model.Maison;
+import com.projdevweb.model.MachineCafe;
 import com.projdevweb.model.Nourriture;
 import com.projdevweb.model.ObjetConnecte;
 import com.projdevweb.model.ParentFamille;
 import com.projdevweb.model.Piece;
 import com.projdevweb.model.Porte;
+import com.projdevweb.model.PorteGarage;
+import com.projdevweb.model.Reveil;
 import com.projdevweb.model.SalleDeBain;
 import com.projdevweb.model.Salon;
 import com.projdevweb.model.Scenario;
 import com.projdevweb.model.ScenarioAction;
 import com.projdevweb.model.ScenarioType;
+import com.projdevweb.model.SecheLinge;
 import com.projdevweb.model.Television;
 import com.projdevweb.model.Thermostat;
 import com.projdevweb.model.Toilettes;
@@ -140,7 +147,7 @@ public class DataSeeder implements CommandLineRunner {
         Porte porteEntree = new Porte("Porte d'entrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 98f, getPiece(pieceByName, "Salon"), 100);
         Volet voletSalon = new Volet("Volet baie vitrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 81f, getPiece(pieceByName, "Salon"), 65);
         Volet voletChambre = new Volet("Volet chambre", "Somfy", Etat.ACTIF, Connectivite.BLUETOOTH, 74f, getPiece(pieceByName, "Chambre parentale"), 30);
-        Porte porteGarage = new Porte("Porte garage", "Nice", Etat.INACTIF, Connectivite.WIFI, 55f, getPiece(pieceByName, "Garage"), 0);
+        PorteGarage porteGarage = new PorteGarage("Porte garage", "Nice", Etat.INACTIF, Connectivite.WIFI, 55f, getPiece(pieceByName, "Garage"), 0);
 
         // Capteurs — Thermostat porte une consigne (tempCible) + mode
         Thermostat thermoSalon = new Thermostat("Thermostat salon", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Zone jour");
@@ -169,17 +176,23 @@ public class DataSeeder implements CommandLineRunner {
         Eau fontaine = new Eau("Fontaine à eau", "PetKit", Etat.ACTIF, Connectivite.WIFI, 68f, getPiece(pieceByName, "Cuisine"), 46f, "Chat");
         fontaine.setPortionGrammes(50);
 
-        // Nouveaux types — extensión UML
-        Fenetre fenetreSalon = new Fenetre("Fenêtre baie vitrée", "Velux",Etat.ACTIF, Connectivite.WIFI, 92f, getPiece(pieceByName, "Salon"), 0);
-        DetecteurMouvement detecteurSalon = new DetecteurMouvement("Détecteur présence salon", "Bosch",Etat.ACTIF, Connectivite.ZIGBEE, 85f, getPiece(pieceByName, "Salon"), "Sécurité");
-        DetecteurMouvement detecteurGarage = new DetecteurMouvement("Détecteur garage", "Bosch",Etat.ACTIF, Connectivite.ZIGBEE, 70f, getPiece(pieceByName, "Garage"), "Garage");
-        Climatiseur climChambre = new Climatiseur("Climatisation chambre", "Daikin",Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"));
+        // Additional UML concrete types for demo coverage
+        Fenetre fenetreSalon = new Fenetre("Fenetre baie vitree", "Velux", Etat.ACTIF, Connectivite.WIFI, 92f, getPiece(pieceByName, "Salon"), 0);
+        DetecteurMouvement detecteurSalon = new DetecteurMouvement("Detecteur presence salon", "Bosch", Etat.ACTIF, Connectivite.BLUETOOTH, 85f, getPiece(pieceByName, "Salon"), "Securite");
+        DetecteurMouvement detecteurGarage = new DetecteurMouvement("Detecteur garage", "Bosch", Etat.ACTIF, Connectivite.BLUETOOTH, 70f, getPiece(pieceByName, "Garage"), "Garage");
+        Climatiseur climChambre = new Climatiseur("Climatisation chambre", "Daikin", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"));
         climChambre.setModeClim(Climatiseur.ModeClim.AUTO.name());
         climChambre.setTempCible(20);
-        Alarme alarme = new Alarme("Système d'alarme", "Somfy",Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
+        Alarme alarme = new Alarme("Systeme d'alarme", "Somfy", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
         alarme.setStatut(Alarme.StatutAlarme.DESARMEE);
-        Aspirateur aspirateur = new Aspirateur("Aspirateur robot", "Roomba",Etat.ACTIF, Connectivite.WIFI, 95f, getPiece(pieceByName, "Cuisine"));
+        Aspirateur aspirateur = new Aspirateur("Aspirateur robot", "Roomba", Etat.ACTIF, Connectivite.WIFI, 95f, getPiece(pieceByName, "Cuisine"));
         aspirateur.setStatutAspirateur(Aspirateur.StatutAspirateur.EN_VEILLE);
+        MachineCafe machineCafe = new MachineCafe("Machine cafe", "Nespresso", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine"));
+        Enceinte enceinteSalon = new Enceinte("Enceinte salon", "Sonos", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
+        Arrosage arrosageJardin = new Arrosage("Arrosage jardin", "Gardena", Etat.INACTIF, Connectivite.WIFI, 88f, getPiece(pieceByName, "Garage"));
+        Reveil reveilChambre = new Reveil("Reveil chambre", "Philips", Etat.ACTIF, Connectivite.BLUETOOTH, null, getPiece(pieceByName, "Chambre parentale"));
+        SecheLinge secheLinge = new SecheLinge("Seche-linge", "Bosch", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"));
+        LaveVaisselle laveVaisselle = new LaveVaisselle("Lave-vaisselle", "Whirlpool", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine"));
 
         objetConnecteRepository.saveAll(List.of(
                 porteEntree, voletSalon, voletChambre, porteGarage,
@@ -187,7 +200,9 @@ public class DataSeeder implements CommandLineRunner {
                 tv, laveLinge,
                 distributeur, fontaine,
                 fenetreSalon, detecteurSalon, detecteurGarage,
-                climChambre, alarme, aspirateur
+                climChambre, alarme, aspirateur,
+                machineCafe, enceinteSalon, arrosageJardin,
+                reveilChambre, secheLinge, laveVaisselle
         ));
     }
 
@@ -413,3 +428,5 @@ public class DataSeeder implements CommandLineRunner {
         return piece;
     }
 }
+
+

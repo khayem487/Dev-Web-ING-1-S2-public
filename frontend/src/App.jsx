@@ -67,7 +67,13 @@ const PAGES = [
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 // Types creatable via POST /api/gestion/objets (backend GestionController#buildByType)
-const GESTION_TYPE_OPTIONS = ['Porte','Volet','Fenetre','Thermostat','Camera','DetecteurMouvement','Television','LaveLinge','Nourriture','Eau','Climatiseur','Alarme','Aspirateur']
+const GESTION_TYPE_OPTIONS = [
+  'Porte', 'PorteGarage', 'Volet', 'Fenetre',
+  'Thermostat', 'Camera', 'DetecteurMouvement',
+  'Television', 'LaveLinge', 'SecheLinge', 'LaveVaisselle',
+  'MachineCafe', 'Enceinte', 'Aspirateur', 'Arrosage', 'Reveil', 'Climatiseur', 'Alarme',
+  'Nourriture', 'Eau'
+]
 const DEMO_CREDENTIALS = [
   { email: 'parent@demo.local', motDePasse: 'demo1234', label: 'ParentFamille', niveauMax: 'Avancé' },
   { email: 'enfant@demo.local', motDePasse: 'demo1234', label: 'Enfant', niveauMax: 'Intermédiaire' },
