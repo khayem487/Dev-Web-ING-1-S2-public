@@ -200,6 +200,14 @@ npm.cmd run build
 5. Montrer l’historique + stats + maintenance
 6. Se connecter en `admin@demo.local` → module Administration
 
+Guide soutenance complet (script oral + plan B):
+- `docs/DEMO_PROF.md`
+
+Smoke test rapide avant passage:
+```bash
+pwsh ./scripts/demo-smoke.ps1
+```
+
 ---
 
 ## Git (commit/push)
