@@ -144,3 +144,9 @@
 - Update this file after each meaningful step.
 - Keep tasks small and testable.
 - If blocked, add blocker + proposed workaround.
+
+- [x] **DB réelle MySQL déployée localement**
+  - docker stack: `docker-compose.mysql.yml`
+  - backend profile: `mysql`
+  - URL backend validée: `http://localhost:8080/api/health`
+  - front validé: `http://localhost:5173`

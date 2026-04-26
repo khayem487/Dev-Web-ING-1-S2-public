@@ -77,7 +77,7 @@ public abstract class Utilisateur {
     private Instant emailVerificationExpireAt;
 
     @Lob
-    @Column(columnDefinition = "CLOB")
+    @Column
     private String photoDataUrl;
 
     /** Points cumulés (Float pour autoriser les +0.25/+0.50). */

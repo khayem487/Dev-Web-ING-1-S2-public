@@ -45,14 +45,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- MySQL driver à activer plus tard -->
-        <!--
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
-        -->
 
         <!-- Validation (Bean Validation API) -->
         <dependency>

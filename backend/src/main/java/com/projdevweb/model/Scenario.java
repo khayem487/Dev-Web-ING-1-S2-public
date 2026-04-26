@@ -64,7 +64,7 @@ public class Scenario {
      * Condition libre interprétée par le service (ex: "night", "day", "temp<18")
      * — utilisée seulement si {@link #type} == {@link ScenarioType#CONDITIONAL}.
      */
-    @Column(length = 120)
+    @Column(name = "condition_expr", length = 120)
     private String condition;
 
     @Column(nullable = false)
