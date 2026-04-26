@@ -3,6 +3,7 @@ package com.projdevweb.dto;
 import com.projdevweb.model.Appareil;
 import com.projdevweb.model.BesoinAnimal;
 import com.projdevweb.model.Capteur;
+import com.projdevweb.model.Climatiseur;
 import com.projdevweb.model.Connectivite;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.LaveLinge;
@@ -54,8 +55,10 @@ public record ObjetConnecteDTO(
         Integer volume,
         String source,
 
-        // Thermostat — consigne (température cible)
+        // Thermostat / Climatiseur — consigne (température cible)
         Float tempCible,
+        // Mode : Thermostat (AUTO/CHAUFFE/ECO/OFF) ou Climatiseur (FROID/CHAUD/AUTO/VENTILATION)
+        String mode,
 
         // BesoinAnimal — réservoir (renommé pour ne pas se confondre avec Utilisateur.niveau côté front)
         Float niveauReservoir,
@@ -96,7 +99,15 @@ public record ObjetConnecteDTO(
             source = tv.getSource();
         }
 
-        Float tempCible = (o instanceof Thermostat thermo) ? thermo.getTempCible() : null;
+        Float tempCible = null;
+        String mode = null;
+        if (o instanceof Thermostat thermo) {
+            tempCible = thermo.getTempCible();
+            mode = thermo.getMode();
+        } else if (o instanceof Climatiseur clim) {
+            tempCible = clim.getTempCible() != null ? clim.getTempCible().floatValue() : null;
+            mode = clim.getModeClim();
+        }
 
         Float niveauReservoir = null;
         String animal = null;
@@ -134,6 +145,7 @@ public record ObjetConnecteDTO(
                 volume,
                 source,
                 tempCible,
+                mode,
                 niveauReservoir,
                 animal,
                 portionGrammes,

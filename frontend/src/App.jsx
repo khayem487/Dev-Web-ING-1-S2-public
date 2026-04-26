@@ -201,6 +201,13 @@ const MODES_THERMOSTAT = [
   { code: 'OFF',     label: 'Arrêt'    },
 ]
 
+const MODES_CLIM = [
+  { code: 'AUTO',         label: 'Auto',        icon: '🌡' },
+  { code: 'FROID',        label: 'Froid',       icon: '❄' },
+  { code: 'CHAUD',        label: 'Chaud',       icon: '🔥' },
+  { code: 'VENTILATION',  label: 'Ventilation', icon: '💨' },
+]
+
 const PRESETS_VOLET = [
   { value: 0,   label: 'Fermé'    },
   { value: 25,  label: '25%'      },
@@ -248,6 +255,13 @@ function displayEtat(o) {
       const src = SOURCES_TV.find((s) => s.code === o.source)
       if (src && src.code !== 'LIVE_TV') return `${src.label} · vol ${o.volume ?? 0}`
       return `Chaîne ${o.chaine ?? 1} · vol ${o.volume ?? 0}`
+    }
+    if (type === 'Climatiseur') {
+      const m = MODES_CLIM.find((x) => x.code === o.mode)
+      const target = o.tempCible != null ? Math.round(o.tempCible) : null
+      if (m && target != null) return `${m.icon} ${m.label} · ${target}°C`
+      if (m) return `${m.icon} ${m.label}`
+      return target != null ? `${target}°C` : 'En marche'
     }
     return 'En marche'
   }
@@ -834,6 +848,100 @@ function ThermostatControl({ obj, accent, canManage, onUpdate, latestMeasure }) 
 }
 
 /**
+ * Climatiseur : modeClim (Froid/Chaud/Auto/Ventilation) + température cible.
+ * Boutons mode iconiques + slider 16-30°C. Pas de mesure live (pas de DonneeCapteur attaché).
+ */
+function ClimatiseurControl({ obj, accent, canManage, onUpdate }) {
+  const [tempCible, setTempCible] = useState(obj.tempCible != null ? Math.round(obj.tempCible) : 22)
+  const [mode, setMode] = useState(obj.mode || 'AUTO')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setTempCible(obj.tempCible != null ? Math.round(obj.tempCible) : 22)
+    setMode(obj.mode || 'AUTO')
+  }, [obj.id, obj.tempCible, obj.mode])
+
+  const dirty = tempCible !== (obj.tempCible != null ? Math.round(obj.tempCible) : null) || mode !== obj.mode
+
+  const apply = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy(true)
+    try {
+      // tempCible passé en Float ; backend cast en Integer pour Climatiseur
+      await onUpdate(obj, { tempCible: Number(tempCible), mode })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const isOff = mode === 'OFF' || obj.etat !== 'ACTIF'
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Climatisation</div>
+      <div style={{ padding:'18px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        {/* Affichage central — tempCible avec dégradé selon le mode */}
+        <div style={{ textAlign:'center' }}>
+          <div className="label" style={{ fontSize:9 }}>Température cible</div>
+          <div className="display num" style={{
+            fontSize:48, lineHeight:1,
+            color: mode === 'FROID' ? 'var(--blue)'
+                 : mode === 'CHAUD' ? 'var(--red)'
+                 : mode === 'VENTILATION' ? 'var(--text)'
+                 : accent,
+            opacity: isOff ? 0.4 : 1,
+          }}>
+            {tempCible}°
+          </div>
+          <div className="mono" style={{ fontSize:10, color:'var(--text-3)', marginTop:4 }}>
+            {(MODES_CLIM.find((m) => m.code === mode)?.label) || mode}
+          </div>
+        </div>
+
+        <input
+          type="range" min="16" max="30" step="1"
+          value={tempCible}
+          onChange={(e) => setTempCible(Number(e.target.value))}
+          disabled={!canManage}
+          aria-label="Température cible climatiseur"
+          style={{ width:'100%', accentColor: accent }}
+        />
+
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:6 }}>
+          {MODES_CLIM.map((m) => (
+            <button
+              key={m.code}
+              type="button"
+              onClick={() => canManage && setMode(m.code)}
+              disabled={!canManage}
+              aria-pressed={mode === m.code}
+              style={{
+                padding:'10px 4px', borderRadius:8, fontSize:11, fontWeight: mode === m.code ? 600 : 400,
+                background: mode === m.code ? accent : 'var(--bg-3)',
+                color: mode === m.code ? '#0e1116' : 'var(--text-2)',
+                border:`1px solid ${mode === m.code ? accent : 'var(--line)'}`,
+                display:'flex', flexDirection:'column', alignItems:'center', gap:4,
+              }}
+            >
+              <span style={{ fontSize:18 }} aria-hidden="true">{m.icon}</span>
+              <span>{m.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {canManage && dirty && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button type="button" onClick={apply} disabled={busy} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12 }}>
+              {busy ? 'Application…' : 'Appliquer'} <Icon name="arrow" size={12}/>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
  * Pet feeder (Nourriture / Eau) : niveau du réservoir, portion par distribution,
  * actions Distribuer maintenant / Remplir réservoir. La planification réelle
  * est gérée par les scénarios programmés (Petit-déj 8h, Dîner 18h, Eau 7h…).
@@ -1135,6 +1243,11 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
           {/* Thermostat — consigne + mode */}
           {obj.type === 'Thermostat' && (
             <ThermostatControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet} latestMeasure={sparkData[sparkData.length - 1]}/>
+          )}
+
+          {/* Climatiseur — mode + tempCible */}
+          {obj.type === 'Climatiseur' && (
+            <ClimatiseurControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
           )}
 
           {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}

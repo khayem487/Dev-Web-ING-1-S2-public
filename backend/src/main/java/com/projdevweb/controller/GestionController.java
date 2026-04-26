@@ -532,6 +532,24 @@ public class GestionController {
             return;
         }
 
+        // Climatiseur — modeClim (FROID/CHAUD/AUTO/VENTILATION) + tempCible (Integer 16-30°C)
+        if (objet instanceof com.projdevweb.model.Climatiseur clim) {
+            if (request.cycle() != null) clim.setCycle(trimToNull(request.cycle()));
+            if (request.consoEnergie() != null) clim.setConsoEnergie(request.consoEnergie());
+            if (request.mode() != null && !request.mode().isBlank()) {
+                String m = request.mode().trim().toUpperCase(Locale.ROOT);
+                try {
+                    com.projdevweb.model.Climatiseur.ModeClim.valueOf(m);
+                    clim.setModeClim(m);
+                } catch (IllegalArgumentException ignored) { /* mode libre toléré */ }
+            }
+            if (request.tempCible() != null) {
+                int target = Math.max(16, Math.min(30, Math.round(request.tempCible())));
+                clim.setTempCible(target);
+            }
+            return;
+        }
+
         // Appareil générique (autres feuilles non encore spécialisées)
         if (objet instanceof Appareil appareil) {
             if (request.cycle() != null) {

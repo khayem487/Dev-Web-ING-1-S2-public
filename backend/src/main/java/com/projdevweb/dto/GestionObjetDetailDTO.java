@@ -3,6 +3,7 @@ package com.projdevweb.dto;
 import com.projdevweb.model.Appareil;
 import com.projdevweb.model.BesoinAnimal;
 import com.projdevweb.model.Capteur;
+import com.projdevweb.model.Climatiseur;
 import com.projdevweb.model.Connectivite;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.LaveLinge;
@@ -108,6 +109,9 @@ public record GestionObjetDetailDTO(
         if (o instanceof Thermostat th) {
             tempCible = th.getTempCible();
             mode = th.getMode();
+        } else if (o instanceof Climatiseur clim) {
+            tempCible = clim.getTempCible() != null ? clim.getTempCible().floatValue() : null;
+            mode = clim.getModeClim();
         }
 
         Float niveau = null;
