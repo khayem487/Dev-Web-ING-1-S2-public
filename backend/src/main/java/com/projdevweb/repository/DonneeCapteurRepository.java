@@ -12,6 +12,8 @@ import java.util.List;
 public interface DonneeCapteurRepository extends JpaRepository<DonneeCapteur, Long> {
     List<DonneeCapteur> findTop20ByObjetOrderByTimestampDesc(ObjetConnecte objet);
 
+    DonneeCapteur findTop1ByObjetOrderByTimestampDesc(ObjetConnecte objet);
+
     @Modifying
     @Query("delete from DonneeCapteur d where d.objet = :objet")
     int deleteByObjet(@Param("objet") ObjetConnecte objet);

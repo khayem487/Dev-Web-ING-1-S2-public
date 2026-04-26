@@ -34,6 +34,7 @@ import com.projdevweb.model.SalleDeBain;
 import com.projdevweb.model.Salon;
 import com.projdevweb.model.Scenario;
 import com.projdevweb.model.ScenarioAction;
+import com.projdevweb.model.ScenarioTriggerEvent;
 import com.projdevweb.model.ScenarioType;
 import com.projdevweb.model.SecheLinge;
 import com.projdevweb.model.Television;
@@ -383,17 +384,15 @@ public class DataSeeder implements CommandLineRunner {
         Scenario bonjour = new Scenario("Bonjour", "☀", ScenarioType.SCHEDULED);
         bonjour.setDescription("Ouverture des volets et préparation matinale, en semaine à 8h00.");
         bonjour.setCron("0 0 8 * * MON-FRI");
-        addAction(bonjour, objetsByNom.get("Volet baie vitrée"), Etat.ACTIF, 80);
-        addAction(bonjour, objetsByNom.get("Volet chambre"), Etat.ACTIF, 80);
+        addAction(bonjour, objetsByNom.get("Volet baie vitree"), Etat.ACTIF, 80);
         addAction(bonjour, objetsByNom.get("TV salon"), Etat.INACTIF, null);
-        addAction(bonjour, objetsByNom.get("Caméra entrée"), Etat.ACTIF, null);
+        addAction(bonjour, objetsByNom.get("Camera entree"), Etat.ACTIF, null);
 
         // 🌙 Bonsoir — chaque jour à 22h00 : volets fermés à 10 %, TV / lave-linge OFF
         Scenario bonsoir = new Scenario("Bonsoir", "🌙", ScenarioType.SCHEDULED);
         bonsoir.setDescription("Fermeture progressive de la maison à 22h00 — volets clos, appareils en veille.");
         bonsoir.setCron("0 0 22 * * *");
-        addAction(bonsoir, objetsByNom.get("Volet baie vitrée"), Etat.ACTIF, 10);
-        addAction(bonsoir, objetsByNom.get("Volet chambre"), Etat.ACTIF, 10);
+        addAction(bonsoir, objetsByNom.get("Volet baie vitree"), Etat.ACTIF, 10);
         addAction(bonsoir, objetsByNom.get("TV salon"), Etat.INACTIF, null);
         addAction(bonsoir, objetsByNom.get("Lave-linge"), Etat.INACTIF, null);
 
@@ -401,16 +400,15 @@ public class DataSeeder implements CommandLineRunner {
         Scenario cinema = new Scenario("Cinéma", "🎬", ScenarioType.MANUAL);
         cinema.setDescription("Mode cinéma : volets fermés et TV allumée pour une ambiance immersive.");
         addAction(cinema, objetsByNom.get("TV salon"), Etat.ACTIF, null);
-        addAction(cinema, objetsByNom.get("Volet baie vitrée"), Etat.ACTIF, 0);
-        addAction(cinema, objetsByNom.get("Volet chambre"), Etat.ACTIF, 0);
+        addAction(cinema, objetsByNom.get("Volet baie vitree"), Etat.ACTIF, 0);
 
         // 🔒 Sécurité — manuel : portes fermées, volet garage fermé, caméras actives
         Scenario securite = new Scenario("Sécurité", "🔒", ScenarioType.MANUAL);
         securite.setDescription("Mise en sécurité : portes verrouillées, volets fermés, caméras actives.");
-        addAction(securite, objetsByNom.get("Porte d'entrée"), Etat.INACTIF, 0);
+        addAction(securite, objetsByNom.get("Porte d'entree"), Etat.INACTIF, 0);
         addAction(securite, objetsByNom.get("Porte garage"), Etat.INACTIF, 0);
-        addAction(securite, objetsByNom.get("Caméra entrée"), Etat.ACTIF, null);
-        addAction(securite, objetsByNom.get("Caméra garage"), Etat.ACTIF, null);
+        addAction(securite, objetsByNom.get("Camera entree"), Etat.ACTIF, null);
+        addAction(securite, objetsByNom.get("Systeme d'alarme"), Etat.ACTIF, null);
 
         // 🐱 Petit-déj du chat — chaque jour à 8h00 : distribuer une portion croquettes
         Scenario petitDej = new Scenario("Petit-déj du chat", "🐱", ScenarioType.SCHEDULED);
@@ -428,16 +426,28 @@ public class DataSeeder implements CommandLineRunner {
         Scenario eauFraiche = new Scenario("Eau fraîche", "💧", ScenarioType.SCHEDULED);
         eauFraiche.setDescription("Remplissage automatique de la fontaine chaque matin à 7h00.");
         eauFraiche.setCron("0 0 7 * * *");
-        addAction(eauFraiche, objetsByNom.get("Fontaine à eau"), Etat.ACTIF, null);
+        addAction(eauFraiche, objetsByNom.get("Fontaine a eau"), Etat.ACTIF, null);
 
         // 🧺 Lessive nuit — manuel : lance le cycle Eco du lave-linge
         Scenario lessive = new Scenario("Lessive Eco", "🧺", ScenarioType.MANUAL);
         lessive.setDescription("Démarre un cycle Eco du lave-linge (programme + paramètres pré-réglés).");
         addAction(lessive, objetsByNom.get("Lave-linge"), Etat.ACTIF, null);
 
+        // 🚨 Intrusion nuit — conditionnel : mouvement détecté + condition night
+        Scenario intrusionNuit = new Scenario("Intrusion nuit", "🚨", ScenarioType.CONDITIONAL);
+        intrusionNuit.setDescription("Si un mouvement est détecté la nuit, active l'alarme et la caméra d'entrée.");
+        intrusionNuit.setTriggerEvent(ScenarioTriggerEvent.MOTION_DETECTED);
+        ObjetConnecte detecteurSalon = objetsByNom.get("Detecteur presence salon");
+        if (detecteurSalon != null) {
+            intrusionNuit.setTriggerObjetId(detecteurSalon.getId());
+        }
+        intrusionNuit.setCondition("night");
+        addAction(intrusionNuit, objetsByNom.get("Systeme d'alarme"), Etat.ACTIF, null);
+        addAction(intrusionNuit, objetsByNom.get("Camera entree"), Etat.ACTIF, null);
+
         scenarioRepository.saveAll(List.of(
                 bonjour, bonsoir, cinema, securite,
-                petitDej, diner, eauFraiche, lessive
+                petitDej, diner, eauFraiche, lessive, intrusionNuit
         ));
     }
 

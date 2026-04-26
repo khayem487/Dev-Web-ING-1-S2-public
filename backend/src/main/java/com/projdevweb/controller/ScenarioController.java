@@ -6,6 +6,7 @@ import com.projdevweb.dto.ScenarioUpsertRequest;
 import com.projdevweb.model.ObjetConnecte;
 import com.projdevweb.model.Scenario;
 import com.projdevweb.model.ScenarioAction;
+import com.projdevweb.model.ScenarioTriggerEvent;
 import com.projdevweb.model.ScenarioType;
 import com.projdevweb.model.Utilisateur;
 import com.projdevweb.repository.ObjetConnecteRepository;
@@ -153,7 +154,19 @@ public class ScenarioController {
         scenario.setType(parseType(request.type()));
         scenario.setCron(validateCron(scenario.getType(), trimToNull(request.cron())));
         scenario.setCondition(trimToNull(request.condition()));
+        scenario.setTriggerObjetId(request.triggerObjetId());
+        scenario.setTriggerEvent(parseTriggerEvent(request.triggerEvent()));
         scenario.setEnabled(request.enabled() == null ? Boolean.TRUE : request.enabled());
+
+        if (scenario.getTriggerObjetId() != null && !objetConnecteRepository.existsById(scenario.getTriggerObjetId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "triggerObjetId introuvable: " + scenario.getTriggerObjetId());
+        }
+
+        if (scenario.getType() == ScenarioType.CONDITIONAL && scenario.getTriggerEvent() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "triggerEvent est requis pour un scénario CONDITIONAL");
+        }
     }
 
     private void applyActions(Scenario scenario, List<ScenarioUpsertRequest.ScenarioActionRequest> requested) {
@@ -203,6 +216,18 @@ public class ScenarioController {
                     "Expression cron invalide : " + cron + " (" + ex.getMessage() + ")");
         }
         return cron;
+    }
+
+    private static ScenarioTriggerEvent parseTriggerEvent(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return ScenarioTriggerEvent.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "triggerEvent invalide (attendu: MOTION_DETECTED, BATTERY_LOW, TEMP_BELOW)");
+        }
     }
 
     private static String trimToNull(String value) {

@@ -84,6 +84,11 @@ const DEMO_CREDENTIALS = [
 const PAGE_STORAGE_KEY = 'devweb.currentPage'
 
 const SCENARIO_TYPES = ['MANUAL', 'SCHEDULED', 'CONDITIONAL']
+const SCENARIO_TRIGGER_EVENTS = [
+  { code: 'MOTION_DETECTED', label: 'Mouvement détecté' },
+  { code: 'BATTERY_LOW', label: 'Batterie faible' },
+  { code: 'TEMP_BELOW', label: 'Température basse' },
+]
 const CRON_PRESETS = [
   { label: 'Tous les jours à 8h00', cron: '0 0 8 * * *' },
   { label: 'Lundi-vendredi à 8h00', cron: '0 0 8 * * MON-FRI' },
@@ -1126,7 +1131,7 @@ function AlarmeControl({ obj, accent, canManage, onUpdate }) {
  * vision nocturne et bouton d'enregistrement live. Pas de capture réelle — la
  * « lecture en direct » est un effet visuel pour la démo.
  */
-function CameraControl({ obj, accent, canManage, onUpdate }) {
+function CameraControl({ obj, accent, canManage, onUpdate, onSimulateEvent }) {
   const [resolution, setResolution] = useState(obj.resolution || 'FULL_HD')
   const [modeCamera, setModeCamera] = useState(obj.modeCamera || 'AUTO')
   const [visionNocturne, setVisionNocturne] = useState(obj.visionNocturne ?? true)
@@ -1153,6 +1158,13 @@ function CameraControl({ obj, accent, canManage, onUpdate }) {
     if (!canManage || !onUpdate) return
     setBusy('rec')
     try { await onUpdate(obj, { enregistrement: !isRec }) }
+    finally { setBusy(null) }
+  }
+
+  const simulateMotion = async () => {
+    if (!canManage || !onSimulateEvent) return
+    setBusy('simulate')
+    try { await onSimulateEvent(obj, 'MOTION_DETECTED') }
     finally { setBusy(null) }
   }
 
@@ -1274,6 +1286,14 @@ function CameraControl({ obj, accent, canManage, onUpdate }) {
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap' }}>
             <button
               type="button"
+              onClick={simulateMotion}
+              disabled={busy != null || isOff}
+              style={{ ...ctaSec, padding:'8px 14px', fontSize:12 }}
+            >
+              {busy === 'simulate' ? '…' : '⚡ Simuler mouvement'}
+            </button>
+            <button
+              type="button"
               onClick={toggleRec}
               disabled={busy != null || isOff}
               style={{
@@ -1300,7 +1320,7 @@ function CameraControl({ obj, accent, canManage, onUpdate }) {
  * Détecteur de mouvement : sensibilité 1-10, dernière détection, total cumulé,
  * bouton « Simuler mouvement » pour la démo (pas de capteur physique).
  */
-function MotionSensorControl({ obj, accent, canManage, onUpdate }) {
+function MotionSensorControl({ obj, accent, canManage, onUpdate, onSimulateEvent }) {
   const [sensibilite, setSensibilite] = useState(obj.sensibilite ?? 5)
   const [busy, setBusy] = useState(null)
 
@@ -1328,9 +1348,15 @@ function MotionSensorControl({ obj, accent, canManage, onUpdate }) {
   }
 
   const simulate = async () => {
-    if (!canManage || !onUpdate) return
+    if (!canManage) return
     setBusy('detect')
-    try { await onUpdate(obj, { motionAction: 'detect' }) } finally { setBusy(null) }
+    try {
+      if (onSimulateEvent) {
+        await onSimulateEvent(obj, 'MOTION_DETECTED')
+      } else if (onUpdate) {
+        await onUpdate(obj, { motionAction: 'detect' })
+      }
+    } finally { setBusy(null) }
   }
 
   return (
@@ -1499,7 +1525,7 @@ function PetFeederControl({ obj, accent, canManage, onUpdate }) {
 }
 
 /* ─── DETAIL DRAWER ─────────────────────────── */
-function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, t }) {
+function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, onSimulateEvent, t }) {
   const [activity, setActivity] = useState([])
   const [actLoading, setActLoading] = useState(false)
   const [actError, setActError] = useState('')
@@ -1519,10 +1545,10 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
     let cancelled = false
     setActLoading(true)
     setActError('')
-    fetchJson(`/api/gestion/historique?limit=40`)
+    fetchJson(`/api/gestion/historique?limit=40&objetId=${objetId}`)
       .then((all) => {
         if (cancelled) return
-        const filtered = (Array.isArray(all) ? all : []).filter((h) => h.objetId === objetId).slice(0, 6)
+        const filtered = (Array.isArray(all) ? all : []).slice(0, 6)
         setActivity(filtered)
       })
       .catch((e) => { if (!cancelled) setActError(e.message || 'Historique indisponible') })
@@ -1711,12 +1737,12 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
 
           {/* Camera — flux placeholder + résolution + mode + enregistrement */}
           {obj.type === 'Camera' && (
-            <CameraControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+            <CameraControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet} onSimulateEvent={onSimulateEvent}/>
           )}
 
           {/* DetecteurMouvement — sensibilité + simulate + dernière détection */}
           {obj.type === 'DetecteurMouvement' && (
-            <MotionSensorControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+            <MotionSensorControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet} onSimulateEvent={onSimulateEvent}/>
           )}
 
           {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}
@@ -1888,14 +1914,14 @@ function HouseMap({ items, pieces }) {
 }
 
 /* ─── HOME ─────────────────────────────────── */
-function HomePage({ user, items, pieces, t, openDetail, onCreateObjet, canManage, scenarios = [], onRunScenario }) {
+function HomePage({ user, items, pieces, t, openDetail, onCreateObjet, canManage, scenarios = [], onRunScenario, energy }) {
   const [showAlerts, setShowAlerts] = useState(false)
   const [runningScenarioId, setRunningScenarioId] = useState(null)
   const actifs = items.filter(o => o.etat==='ACTIF').length;
   const lowBat = items.filter(o => o.batterie!=null && o.batterie<20);
   const inactifs = items.filter(o => o.etat === 'INACTIF')
   const alerts = [...lowBat.map(o => ({ kind:'battery', obj:o })), ...inactifs.slice(0, 5).map(o => ({ kind:'inactive', obj:o }))]
-  const consumption = items.filter(o => o.etat==='ACTIF' && o.branche === 'Appareil').length * 1.2;
+  const consumption = energy?.consoTotaleKwh ?? (items.filter(o => o.etat==='ACTIF' && o.branche === 'Appareil').length * 1.2);
   const hour = new Date().getHours();
   const greeting = hour<12 ? 'Bonjour' : hour<18 ? 'Bon après-midi' : 'Bonsoir';
 
@@ -2714,7 +2740,7 @@ const inputStyle = {
 };
 
 /* ─── GESTION ──────────────────────────── */
-function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal, onFormHandled, scenarios = [], onRunScenario, onScenariosChanged }) {
+function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal, onFormHandled, scenarios = [], onRunScenario, onScenariosChanged, energy }) {
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState('');
@@ -2994,6 +3020,39 @@ function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal,
         </div>
       </article>
 
+      <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, marginBottom:16 }}>
+        <h3 className="display" style={{ fontSize:20, marginBottom:8 }}>
+          Énergie · <span className="mono" style={{ fontSize:12, color:t.accent }}>{(energy?.consoTotaleKwh ?? 0).toFixed(2)} kWh</span>
+        </h3>
+        {!energy && <p style={{ color:'var(--text-3)', fontSize:12 }}>Données énergie indisponibles.</p>}
+        {energy && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            <div style={{ padding:12, borderRadius:10, border:'1px solid var(--line)', background:'var(--bg-2)' }}>
+              <div className="label" style={{ marginBottom:8 }}>Par pièce</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {(energy.parPiece || []).slice(0, 6).map((p) => (
+                  <div key={p.piece} style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'var(--text-2)' }}>
+                    <span>{p.piece}</span>
+                    <span className="mono">{Number(p.consoKwh || 0).toFixed(2)} kWh</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding:12, borderRadius:10, border:'1px solid var(--line)', background:'var(--bg-2)' }}>
+              <div className="label" style={{ marginBottom:8 }}>Top consommateurs</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {(energy.topConsommateurs || []).slice(0, 5).map((a) => (
+                  <div key={a.objetId} style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:12, color:'var(--text-2)' }}>
+                    <span style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.nom}</span>
+                    <span className="mono">{Number(a.consoKwh || 0).toFixed(2)} kWh</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </article>
+
       {showForm && (
         <form onSubmit={submit} className="rise" style={{ borderRadius:18, padding:'24px', marginBottom:24, background:'var(--surface)', border:`1px solid ${t.accent}40` }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18 }}>
@@ -3264,7 +3323,10 @@ function RoutinesSection({ scenarios, objets, accent, onRun, onChanged, onError 
                       {s.type === 'SCHEDULED' ? 'AUTO' : s.type === 'CONDITIONAL' ? 'TRIGGER' : 'MANUEL'}
                     </span>
                     {s.type === 'SCHEDULED' && s.cron && humanCron(s.cron)}
-                    {s.type === 'CONDITIONAL' && (s.condition || 'condition libre')}
+                    {s.type === 'CONDITIONAL' && ([
+                      SCENARIO_TRIGGER_EVENTS.find((ev) => ev.code === s.triggerEvent)?.label || s.triggerEvent || 'événement',
+                      s.condition || 'condition libre'
+                    ].filter(Boolean).join(' · '))}
                     {s.type === 'MANUAL' && 'sur demande'}
                   </div>
                   {s.description && (
@@ -3343,6 +3405,8 @@ function RoutineEditor({ scenario, objets, accent, onSubmit, onCancel }) {
     cron: scenario?.cron || CRON_PRESETS[0].cron,
     cronCustom: scenario && scenario.cron && !CRON_PRESETS.some((p) => p.cron === scenario.cron) ? scenario.cron : '',
     condition: scenario?.condition || '',
+    triggerObjetId: scenario?.triggerObjetId ?? '',
+    triggerEvent: scenario?.triggerEvent || 'MOTION_DETECTED',
     enabled: scenario?.enabled !== false,
     actions: (scenario?.actions || []).map((a) => ({
       objetId: a.objetId,
@@ -3396,6 +3460,8 @@ function RoutineEditor({ scenario, objets, accent, onSubmit, onCancel }) {
       type: form.type,
       cron: form.type === 'SCHEDULED' ? (form.cronCustom.trim() || form.cron) : null,
       condition: form.type === 'CONDITIONAL' ? (form.condition.trim() || null) : null,
+      triggerObjetId: form.type === 'CONDITIONAL' && form.triggerObjetId !== '' ? Number(form.triggerObjetId) : null,
+      triggerEvent: form.type === 'CONDITIONAL' ? (form.triggerEvent || 'MOTION_DETECTED') : null,
       enabled: form.enabled,
       actions: cleanActions,
     }
@@ -3465,9 +3531,24 @@ function RoutineEditor({ scenario, objets, accent, onSubmit, onCancel }) {
       )}
 
       {form.type === 'CONDITIONAL' && (
-        <Field label="Condition (P7 — événement / contexte)">
-          <input style={inputStyle} value={form.condition} onChange={(e)=>setField('condition', e.target.value)} placeholder="Ex : night · MOTION_DETECTED · temp<18"/>
-        </Field>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <Field label="Événement déclencheur">
+            <select style={inputStyle} value={form.triggerEvent} onChange={(e)=>setField('triggerEvent', e.target.value)}>
+              {SCENARIO_TRIGGER_EVENTS.map((ev) => <option key={ev.code} value={ev.code}>{ev.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Objet source (optionnel)">
+            <select style={inputStyle} value={form.triggerObjetId} onChange={(e)=>setField('triggerObjetId', e.target.value)}>
+              <option value="">Tous les objets</option>
+              {objets.map((o) => <option key={o.id} value={o.id}>{o.nom} · {o.pieceNom}</option>)}
+            </select>
+          </Field>
+          <div style={{ gridColumn:'1 / -1' }}>
+            <Field label="Condition contexte (optionnel)">
+              <input style={inputStyle} value={form.condition} onChange={(e)=>setField('condition', e.target.value)} placeholder="Ex : night ou temp<18"/>
+            </Field>
+          </div>
+        </div>
       )}
 
       <div>
@@ -3671,6 +3752,12 @@ function AdminPage({ user, t, onChanged }) {
     [requests]
   )
 
+  const fmtDate = (ts) => {
+    if (!ts) return '-'
+    const d = new Date(ts)
+    return d.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+  }
+
   const decide = async (id, decision) => {
     const note = window.prompt(
       decision === 'approve' ? 'Note admin (optionnel) : suppression validée' : 'Note admin (optionnel) : raison du refus',
@@ -3761,7 +3848,15 @@ function AdminPage({ user, t, onChanged }) {
                 <span className="mono" style={{ fontSize:11, color: r.status === 'PENDING' ? t.accent : 'var(--text-3)' }}>{r.status}</span>
               </div>
               <div style={{ fontSize:12, color:'var(--text-3)', marginTop:4 }}>Demandeur: {r.demandeurEmail || '-'}</div>
+              <div style={{ fontSize:11, color:'var(--text-4)', marginTop:2 }}>Créée le: {fmtDate(r.createdAt)}</div>
               {r.raison && <div style={{ fontSize:12, color:'var(--text-2)', marginTop:4 }}>Raison: {r.raison}</div>}
+              {r.status !== 'PENDING' && (
+                <div style={{ marginTop:6, fontSize:12, color:'var(--text-2)' }}>
+                  <div>Traitée par: {r.traiteParEmail || '-'}</div>
+                  <div>Traitée le: {fmtDate(r.resolvedAt)}</div>
+                  {r.noteAdmin && <div>Note admin: {r.noteAdmin}</div>}
+                </div>
+              )}
               {r.status === 'PENDING' && (
                 <div style={{ display:'flex', gap:8, marginTop:10 }}>
                   <button type="button" style={{ ...ctaPri, background:'var(--green)' }} onClick={() => decide(r.id, 'approve')}>Approuver</button>
@@ -3816,6 +3911,9 @@ function App() {
   const [refreshTick, setRefreshTick] = useState(0)
   const [profileEditorOpen, setProfileEditorOpen] = useState(false)
   const [toast, setToast] = useState(null) // { kind: 'success'|'error', message: string }
+  const [energy, setEnergy] = useState(null)
+  const notificationCursorRef = useRef(new Date(Date.now() - 30 * 60 * 1000).toISOString())
+  const seenNotificationsRef = useRef(new Set())
   const canManage = user?.niveauMax === 'Avancé'
   const visiblePages = useMemo(
     () => PAGES.filter((p) => !p.adminOnly || user?.admin),
@@ -3865,6 +3963,19 @@ function App() {
     }
   }
 
+  const refreshEnergy = async () => {
+    if (!canManage) {
+      setEnergy(null)
+      return
+    }
+    try {
+      const data = await fetchJson('/api/gestion/energie')
+      setEnergy(data || null)
+    } catch {
+      setEnergy(null)
+    }
+  }
+
   const showToast = (kind, message) => {
     setToast({ kind, message })
     setTimeout(() => setToast(null), 3500)
@@ -3880,10 +3991,17 @@ function App() {
   useEffect(() => {
     if (canManage) {
       refreshScenarios()
+      refreshEnergy()
     } else {
       setScenarios([])
+      setEnergy(null)
     }
   }, [canManage])
+
+  useEffect(() => {
+    if (!canManage) return
+    refreshEnergy()
+  }, [refreshTick, canManage])
 
   const handleLogin = async ({ email, motDePasse }) => {
     const data = await fetchJson('/api/auth/login', {
@@ -3961,6 +4079,7 @@ function App() {
         body: JSON.stringify({ actif: target === 'ACTIF' })
       })
       await refreshPublic()
+      await refreshEnergy()
       bumpRefresh()
       setDetail((current) => current && current.id === obj.id ? { ...current, etat: target } : current)
       showToast('success', `${obj.nom} → ${target.toLowerCase()}`)
@@ -3994,6 +4113,7 @@ function App() {
         body: JSON.stringify(payload)
       })
       await refreshPublic()
+      await refreshEnergy()
       bumpRefresh()
       setDetail((current) => current && current.id === obj.id ? toUiItem({ ...current, ...patch }) : current)
       showToast('success', `${obj.nom} mis à jour`)
@@ -4010,9 +4130,34 @@ function App() {
       showToast('success', `${label} exécuté · ${n} action${n > 1 ? 's' : ''}`)
       await refreshPublic()
       await refreshScenarios()
+      await refreshEnergy()
       bumpRefresh()
     } catch (e) {
       showToast('error', `Exécution impossible : ${e.message}`)
+    }
+  }
+
+  const simulateEvent = async (obj, event) => {
+    try {
+      const result = await fetchJson(`/api/gestion/objets/${obj.id}/simulate-event`, {
+        method: 'POST',
+        body: JSON.stringify({ event })
+      })
+      await refreshPublic()
+      await refreshScenarios()
+      await refreshEnergy()
+      bumpRefresh()
+
+      const n = result?.scenariosTriggered || 0
+      if (n > 0) {
+        showToast('success', `${event} simulé · ${n} scénario${n > 1 ? 's' : ''} déclenché${n > 1 ? 's' : ''}`)
+      } else {
+        showToast('success', `${event} simulé · aucun scénario lié`)
+      }
+      return result
+    } catch (e) {
+      showToast('error', `Simulation impossible : ${e.message}`)
+      throw e
     }
   }
 
@@ -4038,12 +4183,55 @@ function App() {
     }
   }, [page, user?.admin])
 
+  useEffect(() => {
+    seenNotificationsRef.current = new Set()
+    notificationCursorRef.current = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!canManage) return
+
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const since = notificationCursorRef.current
+        const data = await fetchJson(`/api/gestion/notifications?since=${encodeURIComponent(since)}`)
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : []
+        if (list.length === 0) return
+
+        const sorted = list.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+        for (const n of sorted) {
+          if (!n?.key || seenNotificationsRef.current.has(n.key)) continue
+          seenNotificationsRef.current.add(n.key)
+          const kind = n.severity === 'critical' ? 'error' : 'success'
+          showToast(kind, n.message || n.type || 'Notification')
+        }
+
+        const newest = sorted[sorted.length - 1]
+        if (newest?.timestamp) {
+          notificationCursorRef.current = newest.timestamp
+        }
+      } catch {
+        // ignore polling errors
+      }
+    }
+
+    poll()
+    const id = setInterval(poll, 30000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [canManage])
+
   const renderPage = () => {
     const props = { user, items, pieces, openDetail, t, health };
     if (page==='home') return (
       <HomePage
         {...props}
         canManage={canManage}
+        energy={energy}
         onCreateObjet={triggerCreateObjet}
         scenarios={scenarios}
         onRunScenario={runScenario}
@@ -4065,6 +4253,7 @@ function App() {
     if (page==='gestion') return (
       <GestionPage
         {...props}
+        energy={energy}
         refreshTick={refreshTick}
         openFormSignal={gestionFormSignal}
         onFormHandled={() => setGestionFormSignal(0)}
@@ -4184,6 +4373,7 @@ function App() {
         canManage={canManage}
         onMethodInvoke={invokeMethod}
         onUpdateObjet={updateObjet}
+        onSimulateEvent={simulateEvent}
         t={t}
       />
 

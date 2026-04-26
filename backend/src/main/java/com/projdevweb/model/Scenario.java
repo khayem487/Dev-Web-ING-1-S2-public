@@ -67,6 +67,20 @@ public class Scenario {
     @Column(name = "condition_expr", length = 120)
     private String condition;
 
+    /**
+     * Objet source de l'événement (optionnel). Si null, le scénario peut
+     * répondre à l'événement quel que soit l'objet émetteur.
+     */
+    @Column
+    private Long triggerObjetId;
+
+    /**
+     * Événement attendu pour exécuter un scénario CONDITIONAL.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 24)
+    private ScenarioTriggerEvent triggerEvent;
+
     @Column(nullable = false)
     private Boolean enabled = Boolean.TRUE;
 
@@ -151,6 +165,22 @@ public class Scenario {
 
     public void setCondition(String condition) {
         this.condition = condition;
+    }
+
+    public Long getTriggerObjetId() {
+        return triggerObjetId;
+    }
+
+    public void setTriggerObjetId(Long triggerObjetId) {
+        this.triggerObjetId = triggerObjetId;
+    }
+
+    public ScenarioTriggerEvent getTriggerEvent() {
+        return triggerEvent;
+    }
+
+    public void setTriggerEvent(ScenarioTriggerEvent triggerEvent) {
+        this.triggerEvent = triggerEvent;
     }
 
     public Boolean getEnabled() {

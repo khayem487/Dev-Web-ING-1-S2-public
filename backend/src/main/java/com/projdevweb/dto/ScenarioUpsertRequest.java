@@ -12,6 +12,8 @@ public record ScenarioUpsertRequest(
         @NotBlank @Size(max = 16) String type,
         @Size(max = 80) String cron,
         @Size(max = 120) String condition,
+        Long triggerObjetId,
+        @Size(max = 24) String triggerEvent,
         Boolean enabled,
         List<ScenarioActionRequest> actions
 ) {

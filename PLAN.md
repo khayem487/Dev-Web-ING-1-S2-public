@@ -27,9 +27,9 @@ Livrer une démo fonctionnelle des modules **Information / Visualisation / Gesti
 | M4 | Qualité & Livraison | Tailwind + responsive + WCAG + MySQL + rapport | done 2026-04-24 |
 | M5 | Alignement v4 | Refonte UI v4 + comblement écarts (P5) | done 2026-04-25 |
 | M6 | Smart-home + Automation | Position contrôle + scénarios programmés/manuels (P6) | done 2026-04-26 |
-| M7 | Réactivité + Énergie | Triggers conditionnels + dashboard conso + notifications (P7) | à faire |
-| M8 | Couverture UML | Tous les types feuille créables côté back/front (P8) | à faire |
-| M9 | Administration | Gouvernance utilisateurs + demandes suppression + audit admin (P9) | in progress 2026-04-26 |
+| M7 | Réactivité + Énergie | Triggers conditionnels + dashboard conso + notifications (P7) | done 2026-04-26 |
+| M8 | Couverture UML | Tous les types feuille créables côté back/front (P8) | done 2026-04-26 |
+| M9 | Administration | Gouvernance utilisateurs + demandes suppression + audit admin (P9) | done 2026-04-26 |
 
 ## Ordre d'implémentation des entités JPA
 
@@ -158,27 +158,27 @@ Login parent → Home → clic "Bonjour" → 4 objets changent visiblement en <1
 **Objectif** : la maison réagit aux événements (mouvement, batterie, température) + dashboard énergétique pour le rapport.
 
 ### Backend
-- [ ] **P7.1** Étendre `Scenario.type` avec `CONDITIONAL` + champs `triggerObjetId` + `triggerEvent` (`MOTION_DETECTED`, `BATTERY_LOW`, `TEMP_BELOW`).
-- [ ] **P7.2** `POST /api/gestion/objets/{id}/simulate-event` `{ event }` (faute de vrais capteurs, bouton démo).
-- [ ] **P7.3** Évaluation contextuelle naïve : `night` = heure ∈ [20:00, 07:00], `day` = sinon, `temp<X` lit la dernière `DonneeCapteur`. Stockée en string libre dans `Scenario.condition`.
-- [ ] **P7.4** `GET /api/gestion/energie` → `{ consoTotaleKwh, parPiece[], topConsommateurs[] }`.
+- [x] **P7.1** Étendre `Scenario.type` avec `CONDITIONAL` + champs `triggerObjetId` + `triggerEvent` (`MOTION_DETECTED`, `BATTERY_LOW`, `TEMP_BELOW`).
+- [x] **P7.2** `POST /api/gestion/objets/{id}/simulate-event` `{ event }` (faute de vrais capteurs, bouton démo).
+- [x] **P7.3** Évaluation contextuelle naïve : `night` = heure ∈ [20:00, 07:00], `day` = sinon, `temp<X` lit la dernière `DonneeCapteur`. Stockée en string libre dans `Scenario.condition`.
+- [x] **P7.4** `GET /api/gestion/energie` → `{ consoTotaleKwh, parPiece[], topConsommateurs[] }`.
 - [ ] **P7.5** `GET /api/gestion/notifications?since=…` (poll) : agrège scénarios récemment exécutés, alertes batterie, événements simulés.
 
 ### Frontend
-- [ ] **P7.6** Bouton "Simuler événement" dans `DetailDrawer` (Camera / DetecteurMouvement) → POST → scénario lié visible immédiatement.
-- [ ] **P7.7** Carte "Consommation" sur HomePage + section détaillée dans Gestion (top 3 consommateurs, barre par pièce).
-- [ ] **P7.8** Slider de température cible pour Thermostat dans `DetailDrawer` (PUT `/objets/{id}` avec `tempCible`).
-- [ ] **P7.9** Toasts in-app via polling 30s sur `/notifications`.
+- [x] **P7.6** Bouton "Simuler événement" dans `DetailDrawer` (Camera / DetecteurMouvement) → POST → scénario lié visible immédiatement.
+- [x] **P7.7** Carte "Consommation" sur HomePage + section détaillée dans Gestion (top 3 consommateurs, barre par pièce).
+- [x] **P7.8** Slider de température cible pour Thermostat dans `DetailDrawer` (PUT `/objets/{id}` avec `tempCible`).
+- [x] **P7.9** Toasts in-app via polling 30s sur `/notifications`.
 
 ## P8 — Élargissement UML backend (volume mécanique)
 
 **Objectif** : couvrir tous les types feuille de l'UML pour atteindre la note maximum sur la couverture du diagramme.
 
-- [ ] **P8.1** Entités manquantes : `Fenetre`, `PorteGarage`, `Climatiseur`, `Alarme`, `DetecteurMouvement`, `MachineCafe`, `Enceinte`, `Aspirateur`, `Arrosage`, `Reveil`, `SecheLinge`, `LaveVaisselle`.
-- [ ] **P8.2** `GestionController#buildByType` étendu pour chaque nouveau type.
-- [ ] **P8.3** `GESTION_TYPE_OPTIONS` côté front aligné.
-- [ ] **P8.4** `GET /api/gestion/historique?objetId={id}` (filtrage côté serveur, le front filtre actuellement en mémoire).
-- [ ] **P8.5** `DataSeeder` : 1 instance par nouveau type (utile pour P6 "Sécurité" avec une vraie Alarme).
+- [x] **P8.1** Entités manquantes : `Fenetre`, `PorteGarage`, `Climatiseur`, `Alarme`, `DetecteurMouvement`, `MachineCafe`, `Enceinte`, `Aspirateur`, `Arrosage`, `Reveil`, `SecheLinge`, `LaveVaisselle`.
+- [x] **P8.2** `GestionController#buildByType` étendu pour chaque nouveau type.
+- [x] **P8.3** `GESTION_TYPE_OPTIONS` côté front aligné.
+- [x] **P8.4** `GET /api/gestion/historique?objetId={id}` (filtrage côté serveur, le front filtre actuellement en mémoire).
+- [x] **P8.5** `DataSeeder` : 1 instance par nouveau type (utile pour P6 "Sécurité" avec une vraie Alarme).
 
 ## P9 — Administration (réintégré 2026-04-26)
 
@@ -194,13 +194,13 @@ Login parent → Home → clic "Bonjour" → 4 objets changent visiblement en <1
   - `PATCH /api/admin/utilisateurs/{id}/admin`
   - `GET /api/admin/demandes-suppression`
   - `POST /api/admin/demandes-suppression/{id}/decision`
-- [ ] **P9.6** Hardening policy : empêcher un seul admin de se désactiver si c'est le dernier admin actif.
+- [x] **P9.6** Hardening policy : empêcher un seul admin de se désactiver si c'est le dernier admin actif.
 
 ### Frontend
 - [x] **P9.7** Onglet `Administration` visible uniquement si `user.admin === true`.
 - [x] **P9.8** Écran admin : traitement demandes suppression (approve/reject) + toggle admin utilisateurs.
 - [x] **P9.9** Gestion côté non-admin : bouton suppression converti en **demande** au lieu de delete direct.
-- [ ] **P9.10** UX polish admin : filtres (pending only), compteur pending, tri/cherche utilisateur.
+- [x] **P9.10** UX polish admin : filtres (pending only), compteur pending, tri/cherche utilisateur.
 
 ### DoD globale
 - Compte `admin@demo.local` voit l'onglet Administration et peut traiter les demandes.

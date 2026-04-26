@@ -1,6 +1,7 @@
 package com.projdevweb.dto;
 
 import com.projdevweb.model.Scenario;
+import com.projdevweb.model.ScenarioTriggerEvent;
 import com.projdevweb.model.ScenarioType;
 
 import java.time.Instant;
@@ -14,6 +15,8 @@ public record ScenarioDTO(
         ScenarioType type,
         String cron,
         String condition,
+        Long triggerObjetId,
+        ScenarioTriggerEvent triggerEvent,
         Boolean enabled,
         Instant dateCreation,
         Instant derniereExecution,
@@ -28,6 +31,8 @@ public record ScenarioDTO(
                 s.getType(),
                 s.getCron(),
                 s.getCondition(),
+                s.getTriggerObjetId(),
+                s.getTriggerEvent(),
                 s.getEnabled(),
                 s.getDateCreation(),
                 s.getDerniereExecution(),

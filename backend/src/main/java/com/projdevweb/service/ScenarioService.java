@@ -2,21 +2,30 @@ package com.projdevweb.service;
 
 import com.projdevweb.model.ActionType;
 import com.projdevweb.model.BesoinAnimal;
+import com.projdevweb.model.DonneeCapteur;
+import com.projdevweb.model.DetecteurMouvement;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.LaveLinge;
 import com.projdevweb.model.ObjetConnecte;
 import com.projdevweb.model.Ouvrant;
 import com.projdevweb.model.Scenario;
 import com.projdevweb.model.ScenarioAction;
+import com.projdevweb.model.ScenarioTriggerEvent;
 import com.projdevweb.model.Utilisateur;
+import com.projdevweb.repository.DonneeCapteurRepository;
 import com.projdevweb.repository.ObjetConnecteRepository;
 import com.projdevweb.repository.ScenarioRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Moteur d'exécution des scénarios.
@@ -38,14 +47,35 @@ public class ScenarioService {
 
     private final ScenarioRepository scenarioRepository;
     private final ObjetConnecteRepository objetConnecteRepository;
+    private final DonneeCapteurRepository donneeCapteurRepository;
     private final PointsService pointsService;
 
     public ScenarioService(ScenarioRepository scenarioRepository,
                            ObjetConnecteRepository objetConnecteRepository,
+                           DonneeCapteurRepository donneeCapteurRepository,
                            PointsService pointsService) {
         this.scenarioRepository = scenarioRepository;
         this.objetConnecteRepository = objetConnecteRepository;
+        this.donneeCapteurRepository = donneeCapteurRepository;
         this.pointsService = pointsService;
+    }
+
+    @Transactional
+    public List<Scenario> runConditionalByEvent(Long objetId,
+                                                ScenarioTriggerEvent event,
+                                                Utilisateur utilisateur) {
+        ObjetConnecte triggerObjet = objetId == null ? null : objetConnecteRepository.findById(objetId).orElse(null);
+        List<Scenario> candidates = scenarioRepository.findConditionalByEventAndObjet(event, objetId);
+        List<Scenario> executed = new ArrayList<>();
+
+        for (Scenario s : candidates) {
+            if (!conditionMatches(s, triggerObjet)) {
+                continue;
+            }
+            run(s, utilisateur);
+            executed.add(s);
+        }
+        return executed;
     }
 
     /**
@@ -114,6 +144,47 @@ public class ScenarioService {
         }
         sb.append(']');
         return sb.toString();
+    }
+
+    private boolean conditionMatches(Scenario scenario, ObjetConnecte triggerObjet) {
+        String raw = scenario.getCondition();
+        if (raw == null || raw.isBlank()) {
+            return true;
+        }
+
+        String c = raw.trim().toLowerCase(Locale.ROOT);
+        if ("night".equals(c)) {
+            LocalTime t = LocalTime.now(ZoneId.systemDefault());
+            return t.isAfter(LocalTime.of(20, 0)) || t.isBefore(LocalTime.of(7, 0));
+        }
+        if ("day".equals(c)) {
+            LocalTime t = LocalTime.now(ZoneId.systemDefault());
+            return !t.isBefore(LocalTime.of(7, 0)) && t.isBefore(LocalTime.of(20, 0));
+        }
+
+        Matcher m = Pattern.compile("^temp\\s*([<>]=?)\\s*(-?\\d+(?:\\.\\d+)?)$").matcher(c);
+        if (m.matches()) {
+            if (triggerObjet == null) {
+                return false;
+            }
+            DonneeCapteur last = donneeCapteurRepository.findTop1ByObjetOrderByTimestampDesc(triggerObjet);
+            if (last == null || last.getValeur() == null) {
+                return false;
+            }
+            double current = last.getValeur();
+            double target = Double.parseDouble(m.group(2));
+            String op = m.group(1);
+            return switch (op) {
+                case "<" -> current < target;
+                case "<=" -> current <= target;
+                case ">" -> current > target;
+                case ">=" -> current >= target;
+                default -> false;
+            };
+        }
+
+        // Condition inconnue => permissive pour ne pas bloquer la démo.
+        return true;
     }
 
     private static Etat parseEtat(String value, Etat fallback) {

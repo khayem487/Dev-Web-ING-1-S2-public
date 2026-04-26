@@ -4,13 +4,17 @@ import com.projdevweb.dto.DonneeCapteurDTO;
 import com.projdevweb.dto.DemandeSuppressionCreateRequest;
 import com.projdevweb.dto.DemandeSuppressionDTO;
 import com.projdevweb.dto.GestionEtatRequest;
+import com.projdevweb.dto.NotificationDTO;
 import com.projdevweb.dto.GestionObjetDetailDTO;
 import com.projdevweb.dto.GestionObjetUpsertRequest;
 import com.projdevweb.dto.GestionStatsDTO;
 import com.projdevweb.dto.HistoriqueActionDTO;
+import com.projdevweb.dto.SimulateEventRequest;
+import com.projdevweb.dto.SimulateEventResultDTO;
 import com.projdevweb.dto.MaintenanceItemDTO;
 import com.projdevweb.dto.ObjetConnecteDTO;
 import com.projdevweb.dto.ServiceSummaryDTO;
+import com.projdevweb.dto.EnergieDTO;
 import com.projdevweb.model.ActionType;
 import com.projdevweb.model.Alarme;
 import com.projdevweb.model.Appareil;
@@ -38,6 +42,8 @@ import com.projdevweb.model.Piece;
 import com.projdevweb.model.Porte;
 import com.projdevweb.model.PorteGarage;
 import com.projdevweb.model.Reveil;
+import com.projdevweb.model.Scenario;
+import com.projdevweb.model.ScenarioTriggerEvent;
 import com.projdevweb.model.SecheLinge;
 import com.projdevweb.model.Television;
 import com.projdevweb.model.Thermostat;
@@ -50,6 +56,7 @@ import com.projdevweb.repository.ObjetConnecteRepository;
 import com.projdevweb.repository.PieceRepository;
 import com.projdevweb.repository.ScenarioActionRepository;
 import com.projdevweb.service.PointsService;
+import com.projdevweb.service.ScenarioService;
 import com.projdevweb.service.SessionUtilisateurService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.transaction.Transactional;
@@ -73,11 +80,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
@@ -100,6 +110,7 @@ public class GestionController {
     private final ScenarioActionRepository scenarioActionRepository;
     private final SessionUtilisateurService sessionUtilisateurService;
     private final PointsService pointsService;
+    private final ScenarioService scenarioService;
 
     public GestionController(ObjetConnecteRepository objetConnecteRepository,
                              PieceRepository pieceRepository,
@@ -108,7 +119,8 @@ public class GestionController {
                              DonneeCapteurRepository donneeCapteurRepository,
                              ScenarioActionRepository scenarioActionRepository,
                              SessionUtilisateurService sessionUtilisateurService,
-                             PointsService pointsService) {
+                             PointsService pointsService,
+                             ScenarioService scenarioService) {
         this.objetConnecteRepository = objetConnecteRepository;
         this.pieceRepository = pieceRepository;
         this.demandeSuppressionRepository = demandeSuppressionRepository;
@@ -117,6 +129,7 @@ public class GestionController {
         this.scenarioActionRepository = scenarioActionRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
         this.pointsService = pointsService;
+        this.scenarioService = scenarioService;
     }
 
     @GetMapping("/objets")
@@ -283,9 +296,20 @@ public class GestionController {
 
     @GetMapping("/historique")
     public List<HistoriqueActionDTO> historique(@RequestParam(defaultValue = "25") int limit,
+                                                @RequestParam(required = false) Long objetId,
                                                 HttpSession session) {
         sessionUtilisateurService.requireAvance(session);
         int safeLimit = Math.max(1, Math.min(limit, 100));
+
+        if (objetId != null) {
+            ObjetConnecte objet = getObjet(objetId);
+            return historiqueActionRepository.findByObjet(objet).stream()
+                    .sorted((a, b) -> b.getTimestamp().compareTo(a.getTimestamp()))
+                    .limit(safeLimit)
+                    .map(HistoriqueActionDTO::from)
+                    .toList();
+        }
+
         return historiqueActionRepository
                 .findAllByOrderByTimestampDesc(PageRequest.of(0, safeLimit))
                 .getContent().stream()
@@ -306,6 +330,129 @@ public class GestionController {
                 .sorted((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()))
                 .map(DonneeCapteurDTO::from)
                 .toList();
+    }
+
+    @PostMapping("/objets/{id}/simulate-event")
+    public SimulateEventResultDTO simulateEvent(@PathVariable Long id,
+                                                @Valid @RequestBody SimulateEventRequest request,
+                                                HttpSession session) {
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
+        ObjetConnecte objet = getObjet(id);
+
+        ScenarioTriggerEvent event = parseTriggerEvent(request.event());
+
+        // Effet local visible immédiatement sur l'objet source.
+        if (event == ScenarioTriggerEvent.MOTION_DETECTED && objet instanceof DetecteurMouvement dm) {
+            dm.declencherDetection();
+            objetConnecteRepository.save(dm);
+        }
+
+        List<Scenario> triggered = scenarioService.runConditionalByEvent(id, event, utilisateur);
+        return new SimulateEventResultDTO(
+                id,
+                event.name(),
+                triggered.size(),
+                triggered.stream().map(Scenario::getNom).toList()
+        );
+    }
+
+    @GetMapping("/energie")
+    public EnergieDTO energie(HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
+        List<ObjetConnecte> objets = objetConnecteRepository.findAll();
+
+        List<EnergieDTO.AppareilConsoDTO> appareils = objets.stream()
+                .filter(o -> o instanceof Appareil)
+                .map(o -> {
+                    Appareil a = (Appareil) o;
+                    double conso = a.getConsoEnergie() != null ? a.getConsoEnergie() : 0d;
+                    if (o.getEtat() != Etat.ACTIF) {
+                        conso = 0d;
+                    }
+                    return new EnergieDTO.AppareilConsoDTO(
+                            o.getId(),
+                            o.getNom(),
+                            o.getPiece() != null ? o.getPiece().getNom() : "Maison",
+                            conso
+                    );
+                })
+                .toList();
+
+        double total = appareils.stream().mapToDouble(EnergieDTO.AppareilConsoDTO::consoKwh).sum();
+
+        List<EnergieDTO.PieceConsoDTO> byPiece = appareils.stream()
+                .collect(Collectors.groupingBy(
+                        EnergieDTO.AppareilConsoDTO::piece,
+                        Collectors.summingDouble(EnergieDTO.AppareilConsoDTO::consoKwh)
+                ))
+                .entrySet().stream()
+                .map(e -> new EnergieDTO.PieceConsoDTO(e.getKey(), round2(e.getValue())))
+                .sorted((a, b) -> Double.compare(b.consoKwh(), a.consoKwh()))
+                .toList();
+
+        List<EnergieDTO.AppareilConsoDTO> top = appareils.stream()
+                .filter(a -> a.consoKwh() > 0)
+                .sorted((a, b) -> Double.compare(b.consoKwh(), a.consoKwh()))
+                .limit(5)
+                .map(a -> new EnergieDTO.AppareilConsoDTO(a.objetId(), a.nom(), a.piece(), round2(a.consoKwh())))
+                .toList();
+
+        return new EnergieDTO(round2(total), byPiece, top);
+    }
+
+    @GetMapping("/notifications")
+    public List<NotificationDTO> notifications(@RequestParam(required = false) String since,
+                                               HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
+
+        Instant sinceTs = parseSinceOrDefault(since, Instant.now().minus(30, ChronoUnit.MINUTES));
+        List<NotificationDTO> out = new ArrayList<>();
+        Map<String, NotificationDTO> dedup = new HashMap<>();
+
+        // 1) Exécutions de scénarios récentes depuis l'historique.
+        historiqueActionRepository.findAllByOrderByTimestampDesc(PageRequest.of(0, 100)).getContent().stream()
+                .filter(h -> h.getTimestamp() != null && h.getTimestamp().isAfter(sinceTs))
+                .filter(h -> h.getAction() == ActionType.SCENARIO_RUN)
+                .map(h -> new NotificationDTO(
+                        "scenario-" + h.getId(),
+                        "SCENARIO_RUN",
+                        "info",
+                        h.getDetails() != null ? h.getDetails() : "Scénario exécuté",
+                        h.getTimestamp()
+                ))
+                .forEach(n -> dedup.put(n.key(), n));
+
+        // 2) Mouvements détectés récents.
+        objetConnecteRepository.findAll().stream()
+                .filter(o -> o instanceof DetecteurMouvement)
+                .map(o -> (DetecteurMouvement) o)
+                .filter(dm -> dm.getDerniereDetectionAt() != null && dm.getDerniereDetectionAt().isAfter(sinceTs))
+                .map(dm -> new NotificationDTO(
+                        "motion-" + dm.getId() + "-" + dm.getDerniereDetectionAt().toEpochMilli(),
+                        "MOTION_DETECTED",
+                        "warning",
+                        "Mouvement détecté · " + dm.getNom(),
+                        dm.getDerniereDetectionAt()
+                ))
+                .forEach(n -> dedup.put(n.key(), n));
+
+        // 3) Batterie faible (<20%) — signal une fois par objet/heure.
+        Instant batteryBucket = Instant.now().truncatedTo(ChronoUnit.HOURS);
+        objetConnecteRepository.findAll().stream()
+                .filter(o -> o.getBatterie() != null && o.getBatterie() < 20f)
+                .map(o -> new NotificationDTO(
+                        "battery-" + o.getId() + "-" + batteryBucket.toEpochMilli(),
+                        "BATTERY_LOW",
+                        "critical",
+                        "Batterie faible · " + o.getNom() + " (" + Math.round(o.getBatterie()) + "%)",
+                        batteryBucket
+                ))
+                .filter(n -> n.timestamp().isAfter(sinceTs))
+                .forEach(n -> dedup.putIfAbsent(n.key(), n));
+
+        out.addAll(dedup.values());
+        out.sort((a, b) -> b.timestamp().compareTo(a.timestamp()));
+        return out;
     }
 
     @GetMapping("/maintenance")
@@ -732,6 +879,33 @@ public class GestionController {
     private static String defaultString(String value, String fallback) {
         String trimmed = trimToNull(value);
         return trimmed == null ? fallback : trimmed;
+    }
+
+    private static double round2(double v) {
+        return Math.round(v * 100.0d) / 100.0d;
+    }
+
+    private static ScenarioTriggerEvent parseTriggerEvent(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "event est requis");
+        }
+        try {
+            return ScenarioTriggerEvent.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "event invalide (MOTION_DETECTED, BATTERY_LOW, TEMP_BELOW)");
+        }
+    }
+
+    private static Instant parseSinceOrDefault(String raw, Instant fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Instant.parse(raw);
+        } catch (Exception ex) {
+            return fallback;
+        }
     }
 
     private static Etat parseEtat(String value, Etat fallback) {
