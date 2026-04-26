@@ -54,6 +54,17 @@ public record GestionObjetUpsertRequest(
         @Size(max = 200) String alarmeZones,
         @Size(max = 8) String alarmeCodePin,
         /** "test" pour déclencher un test d'alerte, "reset" pour revenir DESARMEE. */
-        @Size(max = 16) String alarmeAction
+        @Size(max = 16) String alarmeAction,
+
+        // Camera
+        @Size(max = 16) String resolution,
+        @Size(max = 16) String modeCamera,
+        Boolean enregistrement,
+        Boolean visionNocturne,
+
+        // DetecteurMouvement
+        Integer sensibilite,
+        /** "detect" pour simuler un mouvement détecté. */
+        @Size(max = 16) String motionAction
 ) {
 }

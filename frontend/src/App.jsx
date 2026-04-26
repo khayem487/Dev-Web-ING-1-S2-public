@@ -214,6 +214,20 @@ const STATUTS_ALARME = [
   { code: 'ALERTE',   label: '⚠ Alerte intrusion', color: 'var(--red)',  icon: '🚨' },
 ]
 
+const RESOLUTIONS_CAMERA = [
+  { code: 'SD',      label: 'SD 480p'  },
+  { code: 'HD',      label: 'HD 720p'  },
+  { code: 'FULL_HD', label: 'Full HD'  },
+  { code: 'UHD_4K',  label: '4K UHD'   },
+]
+
+const MODES_CAMERA = [
+  { code: 'AUTO',         label: 'Auto',           icon: '🎯' },
+  { code: 'DAY',          label: 'Jour',           icon: '☀' },
+  { code: 'NIGHT',        label: 'Nuit IR',        icon: '🌙' },
+  { code: 'MOTION_ONLY',  label: 'Mouvement seul', icon: '👁' },
+]
+
 const PRESETS_VOLET = [
   { value: 0,   label: 'Fermé'    },
   { value: 25,  label: '25%'      },
@@ -244,6 +258,21 @@ function displayEtat(o) {
     if (type === 'Thermostat' && o.tempCible != null) {
       const mode = (MODES_THERMOSTAT.find((m) => m.code === o.mode)?.label) || ''
       return etat === 'ACTIF' ? `Consigne ${o.tempCible}°C${mode ? ' · ' + mode : ''}` : 'Désactivé'
+    }
+    if (type === 'Camera') {
+      if (etat !== 'ACTIF') return 'Désactivée'
+      if (o.enregistrement) return '● REC en direct'
+      const m = MODES_CAMERA.find((x) => x.code === o.modeCamera)
+      return m ? `${m.icon} ${m.label}` : 'Surveille'
+    }
+    if (type === 'DetecteurMouvement') {
+      if (etat !== 'ACTIF') return 'Désactivé'
+      if (o.derniereDetectionAt) {
+        const ms = Date.now() - new Date(o.derniereDetectionAt).getTime()
+        if (ms < 60_000) return '⚡ Mouvement détecté'
+        if (ms < 600_000) return `Calme · ${Math.floor(ms/60000)} min`
+      }
+      return `Surveille · sens. ${o.sensibilite ?? 5}/10`
     }
     return etat === 'ACTIF' ? 'Surveille' : 'Désactivé'
   }
@@ -343,6 +372,15 @@ function toUiItem(item) {
     alarmeZones: item?.alarmeZones ?? null,
     alarmeCodePin: item?.alarmeCodePin ?? null,
     derniereAlerte: item?.derniereAlerte ?? null,
+    // Camera
+    resolution: item?.resolution ?? null,
+    modeCamera: item?.modeCamera ?? null,
+    enregistrement: item?.enregistrement == null ? null : Boolean(item.enregistrement),
+    visionNocturne: item?.visionNocturne == null ? null : Boolean(item.visionNocturne),
+    // DetecteurMouvement
+    sensibilite: item?.sensibilite == null ? null : Number(item.sensibilite),
+    derniereDetectionAt: item?.derniereDetectionAt ?? null,
+    totalDetections: item?.totalDetections == null ? null : Number(item.totalDetections),
   }
   // Étiquette d'état type-aware (calculée APRÈS l'enrichissement pour avoir les champs nouveaux dispo)
   enriched.statusLabel = displayEtat(enriched)
@@ -1084,6 +1122,280 @@ function AlarmeControl({ obj, accent, canManage, onUpdate }) {
 }
 
 /**
+ * Caméra : flux vidéo placeholder (animation pulsante), résolution, mode jour/nuit,
+ * vision nocturne et bouton d'enregistrement live. Pas de capture réelle — la
+ * « lecture en direct » est un effet visuel pour la démo.
+ */
+function CameraControl({ obj, accent, canManage, onUpdate }) {
+  const [resolution, setResolution] = useState(obj.resolution || 'FULL_HD')
+  const [modeCamera, setModeCamera] = useState(obj.modeCamera || 'AUTO')
+  const [visionNocturne, setVisionNocturne] = useState(obj.visionNocturne ?? true)
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    setResolution(obj.resolution || 'FULL_HD')
+    setModeCamera(obj.modeCamera || 'AUTO')
+    setVisionNocturne(obj.visionNocturne ?? true)
+  }, [obj.id, obj.resolution, obj.modeCamera, obj.visionNocturne])
+
+  const dirty = resolution !== obj.resolution || modeCamera !== obj.modeCamera || visionNocturne !== obj.visionNocturne
+  const isRec = obj.enregistrement === true
+  const isOff = obj.etat !== 'ACTIF'
+
+  const apply = async (extra = {}) => {
+    if (!canManage || !onUpdate) return
+    setBusy('save')
+    try { await onUpdate(obj, { resolution, modeCamera, visionNocturne, ...extra }) }
+    finally { setBusy(null) }
+  }
+
+  const toggleRec = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('rec')
+    try { await onUpdate(obj, { enregistrement: !isRec }) }
+    finally { setBusy(null) }
+  }
+
+  const modeMeta = MODES_CAMERA.find((m) => m.code === modeCamera) || MODES_CAMERA[0]
+  const isDark = modeCamera === 'NIGHT' || (modeCamera === 'AUTO' && new Date().getHours() >= 20)
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
+        <span>Flux & enregistrement</span>
+        {isRec && <span style={{ color:'var(--red)', textTransform:'none', letterSpacing:0 }}>● ENREGISTREMENT</span>}
+      </div>
+
+      {/* Live feed placeholder */}
+      <div style={{
+        position:'relative', borderRadius:14, overflow:'hidden',
+        background: isOff ? 'var(--bg-3)' : (isDark
+          ? 'linear-gradient(135deg, #0a1f3d, #1a3a5c)'
+          : 'linear-gradient(135deg, #2a3441, #3d4755)'),
+        border:`1px solid ${isRec ? 'var(--red)' : 'var(--line)'}`,
+        aspectRatio:'16 / 9', marginBottom:14,
+      }}>
+        {/* Faux scanlines + bruit pour le rendu CCTV */}
+        {!isOff && (
+          <>
+            <div style={{
+              position:'absolute', inset:0,
+              background:'repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)',
+              pointerEvents:'none',
+            }}/>
+            <div aria-hidden="true" style={{
+              position:'absolute', top:'40%', left:'30%',
+              width:60, height:60, borderRadius:'50%',
+              background:`radial-gradient(circle, ${isDark ? 'rgba(150,255,150,0.25)' : 'rgba(255,255,255,0.15)'}, transparent 70%)`,
+              animation:'rise 3s ease-in-out infinite alternate',
+            }}/>
+            <div aria-hidden="true" style={{
+              position:'absolute', top:'55%', left:'55%',
+              width:40, height:40, borderRadius:'50%',
+              background:`radial-gradient(circle, ${isDark ? 'rgba(150,255,150,0.18)' : 'rgba(255,255,255,0.10)'}, transparent 70%)`,
+              animation:'rise 4s ease-in-out infinite alternate',
+            }}/>
+          </>
+        )}
+        {/* Overlay status */}
+        <div style={{ position:'absolute', top:8, left:10, right:10, display:'flex', justifyContent:'space-between', fontSize:11 }}>
+          <span className="mono" style={{
+            padding:'2px 8px', borderRadius:4,
+            background:'rgba(0,0,0,0.6)',
+            color: isRec ? 'var(--red)' : '#fff',
+          }}>{isRec && '● '}{isOff ? 'OFFLINE' : 'LIVE'}</span>
+          <span className="mono" style={{ padding:'2px 8px', borderRadius:4, background:'rgba(0,0,0,0.6)', color:'#fff' }}>
+            {(RESOLUTIONS_CAMERA.find((r) => r.code === resolution)?.label) || resolution}
+          </span>
+        </div>
+        <div style={{ position:'absolute', bottom:8, left:10, fontSize:10, color:'rgba(255,255,255,0.6)', fontFamily:"'Geist Mono', monospace" }}>
+          {obj.zone || obj.pieceNom} · {modeMeta.icon} {modeMeta.label}
+        </div>
+        {isOff && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-3)', fontSize:14 }}>
+            ⏸ Caméra désactivée
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding:'14px 18px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        {/* Mode */}
+        <div>
+          <div className="label" style={{ fontSize:9, marginBottom:6 }}>Mode</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:6 }}>
+            {MODES_CAMERA.map((m) => (
+              <button
+                key={m.code}
+                type="button"
+                onClick={() => canManage && setModeCamera(m.code)}
+                disabled={!canManage}
+                aria-pressed={modeCamera === m.code}
+                style={{
+                  padding:'8px 4px', borderRadius:8, fontSize:10, fontWeight: modeCamera === m.code ? 600 : 400,
+                  background: modeCamera === m.code ? accent : 'var(--bg-3)',
+                  color: modeCamera === m.code ? '#0e1116' : 'var(--text-2)',
+                  border:`1px solid ${modeCamera === m.code ? accent : 'var(--line)'}`,
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:3,
+                }}
+              >
+                <span style={{ fontSize:14 }} aria-hidden="true">{m.icon}</span>
+                <span>{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Résolution */}
+        <div>
+          <div className="label" style={{ fontSize:9, marginBottom:4 }}>Résolution</div>
+          <select
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value)}
+            disabled={!canManage}
+            style={{ ...inputStyle, padding:'10px 12px' }}
+          >
+            {RESOLUTIONS_CAMERA.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+          </select>
+        </div>
+
+        {/* Vision nocturne */}
+        <label style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:'var(--bg-3)', borderRadius:10, border:'1px solid var(--line)', fontSize:12, cursor: canManage ? 'pointer' : 'not-allowed' }}>
+          <input
+            type="checkbox"
+            checked={visionNocturne}
+            onChange={(e) => canManage && setVisionNocturne(e.target.checked)}
+            disabled={!canManage}
+          />
+          <span style={{ flex:1 }}>Vision nocturne IR automatique</span>
+          <span style={{ color: visionNocturne ? accent : 'var(--text-4)' }}>{visionNocturne ? 'ON' : 'OFF'}</span>
+        </label>
+
+        {canManage && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap' }}>
+            <button
+              type="button"
+              onClick={toggleRec}
+              disabled={busy != null || isOff}
+              style={{
+                ...ctaSec, padding:'8px 14px', fontSize:12,
+                color: isRec ? 'var(--red)' : 'var(--text-2)',
+                borderColor: isRec ? 'var(--red)' : 'var(--line-2)',
+              }}
+            >
+              {busy === 'rec' ? '…' : (isRec ? '■ Stop enregistrement' : '● Démarrer enregistrement')}
+            </button>
+            {dirty && (
+              <button type="button" onClick={() => apply()} disabled={busy != null} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12 }}>
+                {busy === 'save' ? '…' : 'Appliquer'} <Icon name="arrow" size={12}/>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Détecteur de mouvement : sensibilité 1-10, dernière détection, total cumulé,
+ * bouton « Simuler mouvement » pour la démo (pas de capteur physique).
+ */
+function MotionSensorControl({ obj, accent, canManage, onUpdate }) {
+  const [sensibilite, setSensibilite] = useState(obj.sensibilite ?? 5)
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    setSensibilite(obj.sensibilite ?? 5)
+  }, [obj.id, obj.sensibilite])
+
+  const dirty = sensibilite !== obj.sensibilite
+
+  const fmtAge = (iso) => {
+    if (!iso) return 'Aucune détection encore'
+    const ms = Date.now() - new Date(iso).getTime()
+    if (ms < 60_000) return 'À l\'instant'
+    if (ms < 3600_000) return `Il y a ${Math.floor(ms/60000)} min`
+    if (ms < 86400_000) return `Il y a ${Math.floor(ms/3600000)} h`
+    return new Date(iso).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+  }
+
+  const isRecent = obj.derniereDetectionAt && (Date.now() - new Date(obj.derniereDetectionAt).getTime()) < 60_000
+
+  const apply = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('save')
+    try { await onUpdate(obj, { sensibilite }) } finally { setBusy(null) }
+  }
+
+  const simulate = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('detect')
+    try { await onUpdate(obj, { motionAction: 'detect' }) } finally { setBusy(null) }
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Détection de présence</div>
+      <div style={{
+        padding:'18px 20px', borderRadius:14,
+        background: isRecent ? 'rgba(255,181,71,0.08)' : 'var(--bg-2)',
+        border: `1px solid ${isRecent ? accent : 'var(--line)'}`,
+        display:'flex', flexDirection:'column', gap:14,
+      }}>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:36, lineHeight:1 }} aria-hidden="true">{isRecent ? '⚡' : '👁'}</div>
+          <div className="display" style={{ fontSize:18, marginTop:6, color: isRecent ? accent : 'var(--text)' }}>
+            {isRecent ? 'Mouvement détecté' : 'Aucun mouvement récent'}
+          </div>
+          <div className="mono" style={{ fontSize:11, color:'var(--text-3)', marginTop:4 }}>
+            {fmtAge(obj.derniereDetectionAt)}
+          </div>
+          {obj.totalDetections != null && (
+            <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:4 }}>
+              {obj.totalDetections} détection{obj.totalDetections > 1 ? 's' : ''} cumulée{obj.totalDetections > 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>Sensibilité</span>
+            <span className="mono num" style={{ color: accent }}>{sensibilite}/10</span>
+          </div>
+          <input
+            type="range" min="1" max="10" step="1"
+            value={sensibilite}
+            onChange={(e) => setSensibilite(Number(e.target.value))}
+            disabled={!canManage}
+            style={{ width:'100%', accentColor: accent }}
+          />
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:'var(--text-4)', marginTop:2 }}>
+            <span>Faible</span>
+            <span>Très sensible</span>
+          </div>
+        </div>
+
+        {canManage && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap' }}>
+            <button type="button" onClick={simulate} disabled={busy != null || obj.etat !== 'ACTIF'} style={{ ...ctaSec, padding:'8px 14px', fontSize:12 }}>
+              {busy === 'detect' ? '⚡ Détection…' : '⚡ Simuler mouvement'}
+            </button>
+            {dirty && (
+              <button type="button" onClick={apply} disabled={busy != null} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12 }}>
+                {busy === 'save' ? '…' : 'Appliquer'} <Icon name="arrow" size={12}/>
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize:10, color:'var(--text-4)' }}>
+          Astuce : crée un scénario CONDITIONAL « MOTION_DETECTED » pour qu'une détection allume automatiquement les lumières ou déclenche l'alarme.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Pet feeder (Nourriture / Eau) : niveau du réservoir, portion par distribution,
  * actions Distribuer maintenant / Remplir réservoir. La planification réelle
  * est gérée par les scénarios programmés (Petit-déj 8h, Dîner 18h, Eau 7h…).
@@ -1395,6 +1707,16 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
           {/* Alarme — statut + zones + tester */}
           {obj.type === 'Alarme' && (
             <AlarmeControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
+          {/* Camera — flux placeholder + résolution + mode + enregistrement */}
+          {obj.type === 'Camera' && (
+            <CameraControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
+          {/* DetecteurMouvement — sensibilité + simulate + dernière détection */}
+          {obj.type === 'DetecteurMouvement' && (
+            <MotionSensorControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
           )}
 
           {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}
@@ -2695,12 +3017,10 @@ function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal,
             <Field label="État"><select style={inputStyle} value={form.etat} onChange={(e)=>setForm((f)=>({ ...f, etat: e.target.value }))}><option>ACTIF</option><option>INACTIF</option></select></Field>
             <Field label="Connectivité"><select style={inputStyle} value={form.connectivite} onChange={(e)=>setForm((f)=>({ ...f, connectivite: e.target.value }))}><option>WIFI</option><option>BLUETOOTH</option></select></Field>
             <Field label="Batterie %"><input type="number" min="0" max="100" style={inputStyle} value={form.batterie} onChange={(e)=>setForm((f)=>({ ...f, batterie: e.target.value }))}/></Field>
-            {(form.type === 'Porte' || form.type === 'Volet') && <Field label="Position"><input type="number" style={inputStyle} value={form.position} onChange={(e)=>setForm((f)=>({ ...f, position: e.target.value }))}/></Field>}
-            {(form.type === 'Thermostat' || form.type === 'Camera') && <Field label="Zone"><input style={inputStyle} value={form.zone} onChange={(e)=>setForm((f)=>({ ...f, zone: e.target.value }))}/></Field>}
-            {(form.type === 'Television' || form.type === 'LaveLinge') && <><Field label="Cycle"><input style={inputStyle} value={form.cycle} onChange={(e)=>setForm((f)=>({ ...f, cycle: e.target.value }))}/></Field><Field label="Conso énergie"><input type="number" step="0.1" style={inputStyle} value={form.consoEnergie} onChange={(e)=>setForm((f)=>({ ...f, consoEnergie: e.target.value }))}/></Field></>}
+            {(form.type === 'Porte' || form.type === 'Volet' || form.type === 'Fenetre') && <Field label="Position"><input type="number" style={inputStyle} value={form.position} onChange={(e)=>setForm((f)=>({ ...f, position: e.target.value }))}/></Field>}
+            {(form.type === 'Thermostat' || form.type === 'Camera' || form.type === 'DetecteurMouvement') && <Field label="Zone"><input style={inputStyle} value={form.zone} onChange={(e)=>setForm((f)=>({ ...f, zone: e.target.value }))}/></Field>}
+            {(form.type === 'Television' || form.type === 'LaveLinge' || form.type === 'Climatiseur' || form.type === 'Aspirateur') && <><Field label="Cycle"><input style={inputStyle} value={form.cycle} onChange={(e)=>setForm((f)=>({ ...f, cycle: e.target.value }))}/></Field><Field label="Conso énergie"><input type="number" step="0.1" style={inputStyle} value={form.consoEnergie} onChange={(e)=>setForm((f)=>({ ...f, consoEnergie: e.target.value }))}/></Field></>}
             {(form.type === 'Nourriture' || form.type === 'Eau') && <><Field label="Niveau"><input type="number" step="0.1" style={inputStyle} value={form.niveau} onChange={(e)=>setForm((f)=>({ ...f, niveau: e.target.value }))}/></Field><Field label="Animal"><input style={inputStyle} value={form.animal} onChange={(e)=>setForm((f)=>({ ...f, animal: e.target.value }))}/></Field></>}
-            {(form.type === 'Climatiseur') && <Field label="Zone"><input style={inputStyle} value={form.zone} onChange={(e)=>setForm((f)=>({ ...f, zone: e.target.value }))}/></Field>}
-            {(form.type === 'Alarme' || form.type === 'Aspirateur') && <Field label="Zone"><input style={inputStyle} value={form.zone} onChange={(e)=>setForm((f)=>({ ...f, zone: e.target.value }))}/></Field>}
             <div style={{ gridColumn:'span 2', display:'flex', alignItems:'flex-end', gap:8, justifyContent:'flex-end' }}>
               <button type="button" onClick={()=>{ setShowForm(false); setEditing(null); setForm(initialGestionForm()) }} style={ctaSec}>Annuler</button>
               <button type="submit" style={{...ctaPri, background: t.accent}}>{editing?'Enregistrer':'Créer'} <Icon name="arrow" size={13}/></button>

@@ -3,8 +3,10 @@ package com.projdevweb.dto;
 import com.projdevweb.model.Alarme;
 import com.projdevweb.model.Appareil;
 import com.projdevweb.model.BesoinAnimal;
+import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
 import com.projdevweb.model.Climatiseur;
+import com.projdevweb.model.DetecteurMouvement;
 import com.projdevweb.model.Connectivite;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.LaveLinge;
@@ -72,7 +74,18 @@ public record GestionObjetDetailDTO(
         String alarmeStatut,
         String alarmeZones,
         String alarmeCodePin,
-        Instant derniereAlerte
+        Instant derniereAlerte,
+
+        // Camera
+        String resolution,
+        String modeCamera,
+        Boolean enregistrement,
+        Boolean visionNocturne,
+
+        // DetecteurMouvement
+        Integer sensibilite,
+        Instant derniereDetectionAt,
+        Integer totalDetections
 ) {
 
     public static GestionObjetDetailDTO from(ObjetConnecte o) {
@@ -145,6 +158,26 @@ public record GestionObjetDetailDTO(
             derniereAlerte = al.getDerniereAlerte();
         }
 
+        String resolution = null;
+        String modeCamera = null;
+        Boolean enregistrement = null;
+        Boolean visionNocturne = null;
+        if (o instanceof Camera cam) {
+            resolution = cam.getResolution();
+            modeCamera = cam.getModeCamera();
+            enregistrement = cam.getEnregistrement();
+            visionNocturne = cam.getVisionNocturne();
+        }
+
+        Integer sensibilite = null;
+        Instant derniereDetectionAt = null;
+        Integer totalDetections = null;
+        if (o instanceof DetecteurMouvement dm) {
+            sensibilite = dm.getSensibilite();
+            derniereDetectionAt = dm.getDerniereDetectionAt();
+            totalDetections = dm.getTotalDetections();
+        }
+
         return new GestionObjetDetailDTO(
                 o.getId(),
                 o.getNom(),
@@ -181,7 +214,14 @@ public record GestionObjetDetailDTO(
                 alarmeStatut,
                 alarmeZones,
                 alarmeCodePin,
-                derniereAlerte
+                derniereAlerte,
+                resolution,
+                modeCamera,
+                enregistrement,
+                visionNocturne,
+                sensibilite,
+                derniereDetectionAt,
+                totalDetections
         );
     }
 

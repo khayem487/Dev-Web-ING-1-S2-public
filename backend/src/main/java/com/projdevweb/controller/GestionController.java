@@ -471,6 +471,34 @@ public class GestionController {
             return;
         }
 
+        // Camera — résolution + mode (DAY/NIGHT/AUTO/MOTION_ONLY) + enregistrement + vision nocturne
+        if (objet instanceof Camera cam) {
+            if (request.zone() != null) cam.setZone(trimToNull(request.zone()));
+            if (request.resolution() != null && !request.resolution().isBlank()) {
+                String r = request.resolution().trim().toUpperCase(Locale.ROOT);
+                try { Camera.ResolutionCamera.valueOf(r); cam.setResolution(r); }
+                catch (IllegalArgumentException ignored) { /* libre */ }
+            }
+            if (request.modeCamera() != null && !request.modeCamera().isBlank()) {
+                String m = request.modeCamera().trim().toUpperCase(Locale.ROOT);
+                try { Camera.ModeCamera.valueOf(m); cam.setModeCamera(m); }
+                catch (IllegalArgumentException ignored) { /* libre */ }
+            }
+            if (request.enregistrement() != null) cam.setEnregistrement(request.enregistrement());
+            if (request.visionNocturne() != null) cam.setVisionNocturne(request.visionNocturne());
+            return;
+        }
+
+        // DetecteurMouvement — sensibilité 1-10 + simulation détection
+        if (objet instanceof DetecteurMouvement dm) {
+            if (request.zone() != null) dm.setZone(trimToNull(request.zone()));
+            if (request.sensibilite() != null) dm.setSensibilite(request.sensibilite());
+            if ("detect".equalsIgnoreCase(request.motionAction())) {
+                dm.declencherDetection();
+            }
+            return;
+        }
+
         if (objet instanceof Capteur capteur) {
             if (request.zone() != null) {
                 capteur.setZone(trimToNull(request.zone()));
