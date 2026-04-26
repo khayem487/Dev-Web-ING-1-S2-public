@@ -5,6 +5,7 @@ import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 
 import java.time.Instant;
+import java.util.Locale;
 
 /**
  * Machine à café type Nespresso / DeLonghi connectée :
@@ -93,7 +94,14 @@ public class MachineCafe extends Appareil {
     public void setTotalPreparations(Integer n) { this.totalPreparations = n; }
 
     public String getDerniereBoisson() { return derniereBoisson; }
-    public void setDerniereBoisson(String b) { this.derniereBoisson = b; }
+    public void setDerniereBoisson(String b) {
+        if (b == null || b.isBlank()) { this.derniereBoisson = null; return; }
+        try {
+            this.derniereBoisson = Boisson.valueOf(b.trim().toUpperCase(Locale.ROOT)).name();
+        } catch (IllegalArgumentException ex) {
+            // Unknown code — keep existing value instead of silently storing garbage
+        }
+    }
 
     /**
      * Prépare une boisson : consomme eau + café, met à jour les compteurs.

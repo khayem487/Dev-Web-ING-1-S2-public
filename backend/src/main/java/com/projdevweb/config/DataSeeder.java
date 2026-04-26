@@ -255,6 +255,7 @@ public class DataSeeder implements CommandLineRunner {
 
         backfillConsoEnergieAppareils();
         backfillMaintenanceDemo();
+        backfillMachineCafeNiveaux();
     }
 
     /**
@@ -364,6 +365,38 @@ public class DataSeeder implements CommandLineRunner {
         if (appareil instanceof MachineCafe) return 0.08f;
         if (appareil instanceof Reveil) return 0.02f;
         return null;
+    }
+
+    /**
+     * Backfill MachineCafe water/coffee levels that are null on upgrade installs.
+     * Also ensures every MachineCafe has a valid {@code derniereBoisson}.
+     */
+    private void backfillMachineCafeNiveaux() {
+        List<ObjetConnecte> toUpdate = new ArrayList<>();
+        for (ObjetConnecte objet : objetConnecteRepository.findAll()) {
+            if (!(objet instanceof MachineCafe mc)) continue;
+            boolean changed = false;
+            if (mc.getNiveauEau() == null) {
+                mc.setNiveauEau(80f);
+                changed = true;
+            }
+            if (mc.getNiveauCafe() == null) {
+                mc.setNiveauCafe(60f);
+                changed = true;
+            }
+            if (mc.getDerniereBoisson() == null) {
+                mc.setDerniereBoisson(MachineCafe.Boisson.ESPRESSO.name());
+                changed = true;
+            }
+            if (mc.getTotalPreparations() == null) {
+                mc.setTotalPreparations(0);
+                changed = true;
+            }
+            if (changed) toUpdate.add(objet);
+        }
+        if (!toUpdate.isEmpty()) {
+            objetConnecteRepository.saveAll(toUpdate);
+        }
     }
 
     // ------------------------------------------------------------- utilisateurs

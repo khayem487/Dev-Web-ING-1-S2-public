@@ -36,7 +36,7 @@ public class Aspirateur extends Appareil {
     }
 
     @Enumerated(EnumType.STRING)
-    @Column(length = 16)
+    @Column(length = 32)
     private StatutAspirateur statutAspirateur = StatutAspirateur.EN_VEILLE;
 
     /** Zone à nettoyer (libre, ex: "Salon, Cuisine" ou nom de pièce). */
