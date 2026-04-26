@@ -1,40 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "accent": "#ffb547",
-  "scheme": "dark",
-  "compact": false,
-  "houseName": "Famille Martin"
-}/*EDITMODE-END*/;
-
-function useTweaks(defaults) {
-  const [state, setState] = useState(defaults)
-  const setTweak = (key, value) => setState((prev) => ({ ...prev, [key]: value }))
-  return [state, setTweak]
-}
-
-function TweaksPanel() {
-  return null
-}
-
-function TweakSection() {
-  return null
-}
-
-function TweakText() {
-  return null
-}
-
-function TweakColor() {
-  return null
-}
-
-function TweakToggle() {
-  return null
-}
+const ACCENT = '#ffb547'
+const HOUSE_NAME = 'Famille Martin'
 
 /* ─── DATA ──────────────────────────────────────── */
+const ROOM_ICONS = {
+  Salon: '🛋', Cuisine: '🍳', Chambre: '🛏', 'Chambre parentale': '🛏',
+  'Salle de bain': '🛁', Garage: '🚗', Toilettes: '🚽',
+}
+
 const PIECES = [
   { id:1, nom:'Salon', surface:28, type:'Salon', icon:'🛋' },
   { id:2, nom:'Cuisine', surface:14, type:'Cuisine', icon:'🍳' },
@@ -44,17 +19,42 @@ const PIECES = [
   { id:6, nom:'Toilettes', surface:3, type:'Toilettes', icon:'🚽' },
 ];
 
-const ICONS = {
-  Thermostat:'thermo', Camera:'cam', PorteGarage:'door-g', Volet:'volet',
-  LaveLinge:'wash', Television:'tv', Eau:'water', Nourriture:'food',
-  Alarme:'alarm', MachineCafe:'coffee', Porte:'door', Climatiseur:'cool',
-  Fenetre:'window', DetecteurMouvement:'motion', Aspirateur:'vacuum'
-};
+// UML taxonomy: maps every concrete type to its branche, service, icon, and UML methods.
+// Sourced from CONTEXTE_PROJET_DEV_WEB.md §7 and matches backend ObjetConnecteDTO branche/service rules.
+const TYPE_TAXONOMY = {
+  // Ouvrant (Acces)
+  Porte:        { branche:'Ouvrant',     service:'Acces',        icon:'door',     methodes:['ouvrir()','fermer()','setPosition()'] },
+  Volet:        { branche:'Ouvrant',     service:'Acces',        icon:'volet',    methodes:['ouvrir()','fermer()','setPosition()'] },
+  Fenetre:      { branche:'Ouvrant',     service:'Acces',        icon:'window',   methodes:['ouvrir()','fermer()','setPosition()'] },
+  PorteGarage:  { branche:'Ouvrant',     service:'Acces',        icon:'door-g',   methodes:['ouvrir()','fermer()','setPosition()'] },
+  // Capteur (Surveillance)
+  Thermostat:   { branche:'Capteur',     service:'Surveillance', icon:'thermo',   methodes:['lire()','setTemperature()','chauffer()'] },
+  Climatiseur:  { branche:'Capteur',     service:'Surveillance', icon:'cool',     methodes:['lire()','setVitesse()'] },
+  Camera:       { branche:'Capteur',     service:'Surveillance', icon:'cam',      methodes:['lire()','voirFlux()'] },
+  Alarme:       { branche:'Capteur',     service:'Surveillance', icon:'alarm',    methodes:['lire()','alerter()','tester()'] },
+  DetecteurMouvement: { branche:'Capteur', service:'Surveillance', icon:'motion', methodes:['lire()','detecter()'] },
+  // Appareil (Confort)
+  LaveLinge:    { branche:'Appareil',    service:'Confort',      icon:'wash',     methodes:['demarrer()','arreter()','setCycle()'] },
+  SecheLinge:   { branche:'Appareil',    service:'Confort',      icon:'wash',     methodes:['demarrer()','arreter()','setCycle()'] },
+  LaveVaisselle:{ branche:'Appareil',    service:'Confort',      icon:'wash',     methodes:['demarrer()','arreter()','setCycle()'] },
+  MachineCafe:  { branche:'Appareil',    service:'Confort',      icon:'coffee',   methodes:['demarrer()','arreter()','programmer()'] },
+  Television:   { branche:'Appareil',    service:'Confort',      icon:'tv',       methodes:['demarrer()','arreter()','setChaine()'] },
+  Enceinte:     { branche:'Appareil',    service:'Confort',      icon:'tv',       methodes:['demarrer()','arreter()','setSource()'] },
+  Aspirateur:   { branche:'Appareil',    service:'Confort',      icon:'vacuum',   methodes:['demarrer()','arreter()'] },
+  Arrosage:     { branche:'Appareil',    service:'Confort',      icon:'water',    methodes:['demarrer()','arreter()'] },
+  Reveil:       { branche:'Appareil',    service:'Confort',      icon:'alarm',    methodes:['demarrer()','arreter()','programmer()'] },
+  // BesoinAnimal (Animal)
+  Eau:          { branche:'BesoinAnimal', service:'Animal',      icon:'water',    methodes:['verifierNiveau()','remplir()'] },
+  Nourriture:   { branche:'BesoinAnimal', service:'Animal',      icon:'food',     methodes:['verifierNiveau()','distribuer()','programmer()'] },
+}
 
+const ICONS = Object.fromEntries(Object.entries(TYPE_TAXONOMY).map(([k, v]) => [k, v.icon]))
 
+// Backend Niveau.fromPoints() : 0–3 = DEBUTANT, 3–10 = INTERMEDIAIRE, 10+ = AVANCE.
 const NIVEAUX = [
-  { code:'Débutant', seuil:0 }, { code:'Intermédiaire', seuil:50 },
-  { code:'Avancé', seuil:200 }, { code:'Expert', seuil:500 }
+  { code:'Débutant',      seuil:0 },
+  { code:'Intermédiaire', seuil:3 },
+  { code:'Avancé',        seuil:10 },
 ];
 
 const PAGES = [
@@ -62,15 +62,33 @@ const PAGES = [
   { id:'recherche', label:'Recherche', icon:'search' },
   { id:'visualisation', label:'Mes objets', icon:'grid' },
   { id:'gestion', label:'Gestion', icon:'settings' },
+  { id:'admin', label:'Administration', icon:'lock', adminOnly:true },
 ];
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+// Types creatable via POST /api/gestion/objets (backend GestionController#buildByType)
 const GESTION_TYPE_OPTIONS = ['Porte', 'Volet', 'Thermostat', 'Camera', 'Television', 'LaveLinge', 'Nourriture', 'Eau']
 const DEMO_CREDENTIALS = [
-  { email: 'parent@demo.local', motDePasse: 'demo1234' },
-  { email: 'enfant@demo.local', motDePasse: 'demo1234' },
-  { email: 'voisin@demo.local', motDePasse: 'demo1234' }
+  { email: 'parent@demo.local', motDePasse: 'demo1234', label: 'ParentFamille', niveauMax: 'Avancé' },
+  { email: 'enfant@demo.local', motDePasse: 'demo1234', label: 'Enfant', niveauMax: 'Intermédiaire' },
+  { email: 'voisin@demo.local', motDePasse: 'demo1234', label: 'VoisinVisiteur', niveauMax: 'Débutant' },
+  { email: 'admin@demo.local', motDePasse: 'demo1234', label: 'Admin', niveauMax: 'Avancé' },
 ]
+
+const SCENARIO_TYPES = ['MANUAL', 'SCHEDULED', 'CONDITIONAL']
+const CRON_PRESETS = [
+  { label: 'Tous les jours à 8h00', cron: '0 0 8 * * *' },
+  { label: 'Lundi-vendredi à 8h00', cron: '0 0 8 * * MON-FRI' },
+  { label: 'Tous les jours à 22h00', cron: '0 0 22 * * *' },
+  { label: 'Samedi/dimanche à 10h00', cron: '0 0 10 * * SAT,SUN' },
+  { label: 'Toutes les heures', cron: '0 0 * * * *' },
+]
+
+function humanCron(cron) {
+  if (!cron) return ''
+  const preset = CRON_PRESETS.find((p) => p.cron === cron)
+  return preset ? preset.label : cron
+}
 
 function toApiUrl(path) {
   if (/^https?:\/\//i.test(path)) return path
@@ -134,6 +152,7 @@ function toUiUser(user) {
     ...user,
     pseudo: user.pseudo || (user.email ? user.email.split('@')[0] : 'user'),
     photo: initials,
+    admin: Boolean(user.admin || user.isAdmin),
     typeMembre: normalizeEnumLabel(user.typeMembre) || user.typeMembre,
     niveau: normalizeEnumLabel(user.niveau) || user.niveau,
     niveauMax: normalizeEnumLabel(user.niveauMax) || user.niveauMax,
@@ -141,33 +160,40 @@ function toUiUser(user) {
   }
 }
 
-function inferServiceFromType(type = '') {
-  if (['Porte', 'Volet'].includes(type)) return 'Acces'
-  if (['Thermostat', 'Camera'].includes(type)) return 'Surveillance'
-  if (['Television', 'LaveLinge'].includes(type)) return 'Confort'
-  if (['Nourriture', 'Eau'].includes(type)) return 'Animal'
-  return 'Confort'
+function taxonomyFor(type) {
+  return TYPE_TAXONOMY[type] || { branche:'ObjetConnecte', service:'General', icon:'grid', methodes:['activer()','desactiver()'] }
 }
 
-function inferBrancheFromType(type = '') {
-  if (['Porte', 'Volet'].includes(type)) return 'Ouvrant'
-  if (['Thermostat', 'Camera'].includes(type)) return 'Capteur'
-  if (['Television', 'LaveLinge'].includes(type)) return 'Appareil'
-  if (['Nourriture', 'Eau'].includes(type)) return 'BesoinAnimal'
-  return 'Capteur'
+// Methods we can actually invoke against the existing backend.
+// Setters (setTemperature/setCycle/...) are display-only — no dedicated endpoint yet.
+const ACTIVATING_METHODS = new Set(['ouvrir()', 'demarrer()', 'activer()', 'remplir()', 'distribuer()'])
+const DEACTIVATING_METHODS = new Set(['fermer()', 'arreter()', 'desactiver()'])
+
+function isMethodActionable(method, obj) {
+  if (!obj) return false
+  if (ACTIVATING_METHODS.has(method)) return obj.etat !== 'ACTIF'
+  if (DEACTIVATING_METHODS.has(method)) return obj.etat === 'ACTIF'
+  return false
+}
+
+function methodToEtat(method) {
+  if (ACTIVATING_METHODS.has(method)) return 'ACTIF'
+  if (DEACTIVATING_METHODS.has(method)) return 'INACTIF'
+  return null
 }
 
 function toUiItem(item) {
   const id = Number(item?.id || 0)
   const type = item?.type || 'Objet'
+  const tax = taxonomyFor(type)
   const prefix = String(type).slice(0, 2).toUpperCase()
   return {
     ...item,
     id,
     type,
     code: item?.code || `${prefix}-${String(id).padStart(3, '0')}`,
-    branche: item?.branche || inferBrancheFromType(type),
-    service: item?.service || inferServiceFromType(type),
+    branche: item?.branche || tax.branche,
+    service: item?.service || tax.service,
     pieceNom: item?.pieceNom || 'Maison',
     marque: item?.marque || 'N/A',
     connectivite: item?.connectivite || 'WIFI',
@@ -251,7 +277,7 @@ function RoomChip({ room, count, active, onClick }) {
 }
 
 /* ─── DEVICE TILE ─────────────────────────────── */
-function DeviceTile({ obj, idx, onClick, actions, compact }) {
+function DeviceTile({ obj, onClick, actions, compact }) {
   const active = obj.etat === 'ACTIF';
   const lowBat = obj.batterie != null && obj.batterie < 20;
   return (
@@ -336,13 +362,124 @@ const iconBtn = {
   display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s',
 };
 
+/* ─── SPARKLINE (SVG inline, no lib) ───────── */
+function Sparkline({ data, color = '#ffb547', height = 60 }) {
+  if (!data || data.length < 2) return null
+  const width = 380
+  const padX = 6
+  const padY = 6
+  const values = data.map((d) => d.valeur)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const stepX = (width - padX * 2) / (data.length - 1)
+  const points = data.map((d, i) => {
+    const x = padX + i * stepX
+    const y = padY + (1 - (d.valeur - min) / span) * (height - padY * 2)
+    return [x, y]
+  })
+  const path = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ')
+  const area = `${path} L ${points[points.length - 1][0].toFixed(1)} ${(height - padY).toFixed(1)} L ${points[0][0].toFixed(1)} ${(height - padY).toFixed(1)} Z`
+  const last = points[points.length - 1]
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Graphique des dernières mesures">
+      <defs>
+        <linearGradient id="sparkGrad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#sparkGrad)" stroke="none"/>
+      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={last[0]} cy={last[1]} r="3" fill={color}/>
+    </svg>
+  )
+}
+
 /* ─── DETAIL DRAWER ─────────────────────────── */
-function DetailDrawer({ obj, onClose }) {
+function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, t }) {
+  const [activity, setActivity] = useState([])
+  const [actLoading, setActLoading] = useState(false)
+  const [actError, setActError] = useState('')
+  const [busyMethod, setBusyMethod] = useState(null)
+  const [sparkData, setSparkData] = useState([])
+  const [sliderPos, setSliderPos] = useState(null)
+  const [savingPos, setSavingPos] = useState(false)
+
+  const objetId = obj?.id
+  const branche = obj?.branche
+
+  useEffect(() => {
+    if (!objetId || !canManage) {
+      setActivity([])
+      return
+    }
+    let cancelled = false
+    setActLoading(true)
+    setActError('')
+    fetchJson(`/api/gestion/historique?limit=40`)
+      .then((all) => {
+        if (cancelled) return
+        const filtered = (Array.isArray(all) ? all : []).filter((h) => h.objetId === objetId).slice(0, 6)
+        setActivity(filtered)
+      })
+      .catch((e) => { if (!cancelled) setActError(e.message || 'Historique indisponible') })
+      .finally(() => { if (!cancelled) setActLoading(false) })
+    return () => { cancelled = true }
+  }, [objetId, canManage])
+
+  useEffect(() => {
+    if (!objetId || !canManage || branche !== 'Capteur') {
+      setSparkData([])
+      return
+    }
+    let cancelled = false
+    fetchJson(`/api/gestion/objets/${objetId}/donnees`)
+      .then((data) => { if (!cancelled) setSparkData(Array.isArray(data) ? data : []) })
+      .catch(() => { if (!cancelled) setSparkData([]) })
+    return () => { cancelled = true }
+  }, [objetId, canManage, branche])
+
+  useEffect(() => {
+    if (obj?.position != null) setSliderPos(Number(obj.position))
+    else setSliderPos(null)
+  }, [objetId, obj?.position])
+
   if (!obj) return null;
-  const methodes = obj.branche === 'Ouvrant' ? ['ouvrir()','fermer()','setPosition()'] :
-                   obj.branche === 'Capteur' ? ['lire()','alerter()',obj.type==='Thermostat' && 'setTemperature()'].filter(Boolean) :
-                   obj.branche === 'Appareil' ? ['demarrer()','arreter()'] :
-                   obj.branche === 'BesoinAnimal' ? ['verifierNiveau()',obj.type==='Eau'?'remplir()':'distribuer()'] : ['activer()','desactiver()'];
+  const tax = taxonomyFor(obj.type)
+  const methodes = tax.methodes
+  const accent = t?.accent || ACCENT
+
+  const fmtTime = (ts) => {
+    const d = ts ? new Date(ts) : new Date()
+    const diff = Date.now() - d.getTime()
+    if (diff < 60000) return "à l'instant"
+    if (diff < 3600000) return `il y a ${Math.floor(diff/60000)} min`
+    if (diff < 86400000) return `il y a ${Math.floor(diff/3600000)} h`
+    return d.toLocaleDateString('fr-FR', { day:'numeric', month:'short' })
+  }
+
+  const handleMethod = async (m) => {
+    if (!canManage || !onMethodInvoke || busyMethod) return
+    setBusyMethod(m)
+    try {
+      await onMethodInvoke(obj, m)
+    } finally {
+      setBusyMethod(null)
+    }
+  }
+
+  const applyPosition = async () => {
+    if (!canManage || !onUpdateObjet || sliderPos == null) return
+    setSavingPos(true)
+    try {
+      await onUpdateObjet(obj, { position: sliderPos })
+    } finally {
+      setSavingPos(false)
+    }
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:200, backdropFilter:'blur(4px)', animation:'rise .2s' }}/>
@@ -373,15 +510,88 @@ function DetailDrawer({ obj, onClose }) {
               padding:'24px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)',
               display:'flex', flexDirection:'column', alignItems:'center', gap:8,
             }}>
-              <div className="display" style={{ fontSize:48, color: obj.etat==='ACTIF' ? 'var(--accent)' : 'var(--text-3)', lineHeight:1 }}>{obj.valeur}</div>
+              <div className="display" style={{ fontSize:48, color: obj.etat==='ACTIF' ? 'var(--accent)' : 'var(--text-3)', lineHeight:1 }}>
+                {sparkData.length > 0
+                  ? `${sparkData[sparkData.length - 1].valeur.toFixed(1)} ${sparkData[sparkData.length - 1].unite || ''}`.trim()
+                  : obj.valeur}
+              </div>
               <div className="label" style={{ color:'var(--text-3)' }}>{obj.pieceNom} · {obj.connectivite}</div>
             </div>
           </div>
 
+          {branche === 'Ouvrant' && (
+            <div>
+              <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
+                <span>Position</span>
+                <span className="mono num" style={{ color: accent, textTransform:'none', letterSpacing:0, fontFamily:"'Geist Mono', monospace" }}>
+                  {sliderPos != null ? `${sliderPos}%` : '—'}
+                </span>
+              </div>
+              <div style={{
+                padding:'18px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)',
+                display:'flex', flexDirection:'column', gap:12,
+              }}>
+                <input
+                  type="range"
+                  min="0" max="100" step="1"
+                  value={sliderPos ?? 0}
+                  onChange={(e) => setSliderPos(Number(e.target.value))}
+                  disabled={!canManage}
+                  aria-label={`Position de ${obj.nom}`}
+                  style={{ width:'100%', accentColor: accent }}
+                />
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-4)' }}>
+                  <span>0% fermé</span>
+                  <span>50%</span>
+                  <span>100% ouvert</span>
+                </div>
+                {canManage && (
+                  <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+                    <button
+                      type="button"
+                      onClick={() => setSliderPos(obj.position ?? 0)}
+                      disabled={savingPos || sliderPos === (obj.position ?? 0)}
+                      style={{ ...ctaSec, padding:'8px 14px', fontSize:12, opacity: sliderPos === (obj.position ?? 0) ? 0.5 : 1 }}
+                    >Annuler</button>
+                    <button
+                      type="button"
+                      onClick={applyPosition}
+                      disabled={savingPos || sliderPos === (obj.position ?? 0)}
+                      style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12, opacity: sliderPos === (obj.position ?? 0) ? 0.5 : 1 }}
+                    >{savingPos ? 'Application…' : 'Appliquer'} <Icon name="arrow" size={12}/></button>
+                  </div>
+                )}
+                {!canManage && (
+                  <div style={{ fontSize:11, color:'var(--text-3)' }}>
+                    Lecture seule — niveau Avancé requis pour modifier la position.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {branche === 'Capteur' && sparkData.length > 1 && (
+            <div>
+              <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
+                <span>Mesures · {sparkData[0].grandeur}</span>
+                <span style={{ color:'var(--text-4)', fontFamily:"'Geist Mono', monospace", letterSpacing:0, textTransform:'none' }}>
+                  {sparkData.length} pts
+                </span>
+              </div>
+              <div style={{ padding:'14px 16px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
+                <Sparkline data={sparkData} color={accent}/>
+                <div style={{ display:'flex', justifyContent:'space-between', marginTop:8, fontSize:11, color:'var(--text-4)' }}>
+                  <span>min {Math.min(...sparkData.map(d=>d.valeur)).toFixed(1)} {sparkData[0].unite}</span>
+                  <span>max {Math.max(...sparkData.map(d=>d.valeur)).toFixed(1)} {sparkData[0].unite}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="label" style={{ marginBottom:10 }}>Attributs</div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              {Object.entries(obj).filter(([k,v]) => v != null && !['id','code','nom','branche','marque','valeur','pieceNom','connectivite'].includes(k)).map(([k,v]) => (
+              {Object.entries(obj).filter(([k,v]) => v != null && !['id','code','nom','branche','marque','valeur','pieceNom','connectivite','position','service','type','etat'].includes(k)).map(([k,v]) => (
                 <div key={k} style={{ padding:'10px 12px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
                   <div className="label" style={{ fontSize:9, marginBottom:3 }}>{k}</div>
                   <div className="display" style={{ fontSize:15, color:'var(--text)' }}>{String(v)}</div>
@@ -391,28 +601,55 @@ function DetailDrawer({ obj, onClose }) {
           </div>
 
           <div>
-            <div className="label" style={{ marginBottom:10 }}>Méthodes UML</div>
+            <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
+              <span>Méthodes UML</span>
+              {!canManage && <span style={{ color:'var(--text-4)', textTransform:'none', letterSpacing:0, fontFamily:'inherit' }}>lecture seule</span>}
+            </div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              {methodes.map(m => (
-                <button key={m} className="mono" style={{
-                  padding:'8px 12px', fontSize:12, borderRadius:8,
-                  background:'var(--bg-3)', color:'var(--text-2)', border:'1px solid var(--line-2)',
-                }}>{m}</button>
-              ))}
+              {methodes.map(m => {
+                const enabled = canManage && isMethodActionable(m, obj)
+                const busy = busyMethod === m
+                return (
+                  <button
+                    key={m}
+                    className="mono"
+                    type="button"
+                    onClick={enabled ? () => handleMethod(m) : undefined}
+                    disabled={!enabled || busy}
+                    aria-disabled={!enabled || busy}
+                    title={enabled ? `Exécuter ${m}` : 'Action non disponible avec votre niveau'}
+                    style={{
+                      padding:'8px 12px', fontSize:12, borderRadius:8,
+                      background: enabled ? 'var(--bg-3)' : 'var(--bg-2)',
+                      color: enabled ? 'var(--text-2)' : 'var(--text-4)',
+                      border:'1px solid var(--line-2)',
+                      cursor: enabled ? 'pointer' : 'not-allowed',
+                      opacity: busy ? 0.6 : 1,
+                    }}
+                  >{busy ? `${m}…` : m}</button>
+                )
+              })}
             </div>
           </div>
 
           <div>
-            <div className="label" style={{ marginBottom:10 }}>Activité (24h)</div>
+            <div className="label" style={{ marginBottom:10 }}>Historique récent</div>
             <div style={{ borderRadius:12, background:'var(--bg-2)', border:'1px solid var(--line)', padding:'14px 16px' }}>
-              {[
-                { t:'14:17', txt: obj.type === 'Thermostat' ? '21.4°C · cible 22°C' : 'Lecture OK' },
-                { t:'13:02', txt: obj.batterie != null ? `Batterie ${obj.batterie}%` : 'Cycle terminé' },
-                { t:'09:55', txt:`Dernière action — ${obj.etat}` },
-              ].map((l,i) => (
-                <div key={i} style={{ display:'flex', gap:14, padding:'8px 0', fontSize:12, borderBottom: i<2 ? '1px solid var(--line)' : 'none' }}>
-                  <span className="mono" style={{ color:'var(--text-4)', minWidth:40 }}>{l.t}</span>
-                  <span style={{ color:'var(--text-2)' }}>{l.txt}</span>
+              {!canManage && (
+                <div style={{ fontSize:12, color:'var(--text-3)' }}>Réservé aux comptes <strong>Avancé</strong>.</div>
+              )}
+              {canManage && actLoading && <div style={{ fontSize:12, color:'var(--text-3)' }}>Chargement…</div>}
+              {canManage && actError && <div style={{ fontSize:12, color:'var(--red)' }}>{actError}</div>}
+              {canManage && !actLoading && !actError && activity.length === 0 && (
+                <div style={{ fontSize:12, color:'var(--text-3)' }}>Aucune action enregistrée pour cet objet.</div>
+              )}
+              {canManage && !actLoading && activity.map((h, i) => (
+                <div key={h.id ?? i} style={{ display:'flex', gap:14, padding:'8px 0', fontSize:12, borderBottom: i<activity.length-1 ? '1px solid var(--line)' : 'none' }}>
+                  <span className="mono" style={{ color:'var(--text-4)', minWidth:60 }}>{fmtTime(h.timestamp)}</span>
+                  <span style={{ color:'var(--text-2)', flex:1 }}>
+                    <span className="mono" style={{ fontSize:10, padding:'1px 6px', borderRadius:4, background:'var(--bg-3)', color: accent, marginRight:8 }}>{h.action}</span>
+                    {h.details || (h.utilisateurEmail ? `par ${h.utilisateurEmail}` : '—')}
+                  </span>
                 </div>
               ))}
             </div>
@@ -424,10 +661,12 @@ function DetailDrawer({ obj, onClose }) {
 }
 
 /* ─── HOUSE MAP ───────────────────────────── */
-function HouseMap({ items, pieces, t }) {
+function HouseMap({ items, pieces }) {
   const piecesList = pieces?.length ? pieces : PIECES
   const counts = {};
   piecesList.forEach(p => { counts[p.nom] = items.filter(o=>o.pieceNom===p.nom && o.etat==='ACTIF').length; });
+  const totalActive = Object.values(counts).reduce((a,b)=>a+b,0)
+  const maxActive = Math.max(1, ...Object.values(counts))
   return (
     <div style={{
       borderRadius:18, background:'var(--surface)', border:'1px solid var(--line)',
@@ -439,41 +678,36 @@ function HouseMap({ items, pieces, t }) {
           <h3 className="display" style={{ fontSize:22 }}>Vue d'ensemble</h3>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:'var(--text-3)' }}>
-          <span className="num display" style={{ fontSize:32, color:'var(--accent)', lineHeight:1 }}>{Object.values(counts).reduce((a,b)=>a+b,0)}</span>
+          <span className="num display" style={{ fontSize:32, color:'var(--accent)', lineHeight:1 }}>{totalActive}</span>
           <span style={{ lineHeight:1.3 }}>objets<br/>actifs</span>
         </div>
       </div>
       <div style={{
-        display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gridTemplateRows:'1fr 0.8fr',
-        gap:8, height:280, position:'relative',
+        display:'grid',
+        gridTemplateColumns:`repeat(${Math.min(piecesList.length, 3)}, 1fr)`,
+        gap:8, position:'relative',
       }}>
-        {[
-          { nom:'Salon', col:'1 / 2', row:'1 / 3' },
-          { nom:'Cuisine', col:'2 / 3', row:'1 / 2' },
-          { nom:'Chambre', col:'3 / 4', row:'1 / 2' },
-          { nom:'Salle de bain', col:'2 / 3', row:'2 / 3' },
-          { nom:'Garage', col:'3 / 4', row:'2 / 3' },
-        ].map(p => {
-          const room = piecesList.find(r => r.nom === p.nom) || { icon: '•', surface: 0 };
+        {piecesList.map(p => {
           const c = counts[p.nom] || 0;
-          const intensity = c / 4;
+          const intensity = c / maxActive;
+          const icon = p.icon || ROOM_ICONS[p.nom] || '•'
+          const surface = p.surface != null ? `${p.surface}m²` : (p.type || 'Pièce')
           return (
-            <div key={p.nom} style={{
-              gridColumn: p.col, gridRow: p.row,
-              borderRadius:12, padding:'14px 16px',
+            <div key={p.id ?? p.nom} style={{
+              borderRadius:12, padding:'14px 16px', minHeight:108,
               background: c > 0 ? `linear-gradient(135deg, rgba(255,181,71,${intensity*0.3}), var(--bg-2))` : 'var(--bg-2)',
               border: '1px solid var(--line)',
               display:'flex', flexDirection:'column', justifyContent:'space-between',
               position:'relative', overflow:'hidden',
             }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-                <span style={{ fontSize:22 }}>{room.icon}</span>
-                {c > 0 && <span style={{ width:8, height:8, borderRadius:'50%', background:'var(--accent)', boxShadow:`0 0 8px var(--accent)` }}/>}
+                <span style={{ fontSize:22 }} aria-hidden="true">{icon}</span>
+                {c > 0 && <span aria-label={`${c} objets actifs`} style={{ width:8, height:8, borderRadius:'50%', background:'var(--accent)', boxShadow:`0 0 8px var(--accent)` }}/>}
               </div>
               <div>
                 <div className="display" style={{ fontSize:15, color:'var(--text)' }}>{p.nom}</div>
                 <div className="mono" style={{ fontSize:11, color:'var(--text-3)', marginTop:2 }}>
-                  <span className="num" style={{ color: c>0 ? 'var(--accent)' : 'var(--text-3)' }}>{c}</span> actif{c!==1?'s':''} · {room.surface}m²
+                  <span className="num" style={{ color: c>0 ? 'var(--accent)' : 'var(--text-3)' }}>{c}</span> actif{c!==1?'s':''} · {surface}
                 </div>
               </div>
             </div>
@@ -485,9 +719,13 @@ function HouseMap({ items, pieces, t }) {
 }
 
 /* ─── HOME ─────────────────────────────────── */
-function HomePage({ user, items, pieces, t, openDetail, health }) {
+function HomePage({ user, items, pieces, t, openDetail, onCreateObjet, canManage, scenarios = [], onRunScenario }) {
+  const [showAlerts, setShowAlerts] = useState(false)
+  const [runningScenarioId, setRunningScenarioId] = useState(null)
   const actifs = items.filter(o => o.etat==='ACTIF').length;
   const lowBat = items.filter(o => o.batterie!=null && o.batterie<20);
+  const inactifs = items.filter(o => o.etat === 'INACTIF')
+  const alerts = [...lowBat.map(o => ({ kind:'battery', obj:o })), ...inactifs.slice(0, 5).map(o => ({ kind:'inactive', obj:o }))]
   const consumption = items.filter(o => o.etat==='ACTIF' && o.branche === 'Appareil').length * 1.2;
   const hour = new Date().getHours();
   const greeting = hour<12 ? 'Bonjour' : hour<18 ? 'Bon après-midi' : 'Bonsoir';
@@ -506,10 +744,137 @@ function HomePage({ user, items, pieces, t, openDetail, health }) {
           </p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          <button style={ctaSec}><Icon name="bell" size={14}/> Alertes</button>
-          <button style={{...ctaPri, background: t.accent}}><Icon name="plus" size={14}/> Nouvel objet</button>
+          <button
+            type="button"
+            onClick={() => setShowAlerts((v) => !v)}
+            aria-expanded={showAlerts}
+            aria-controls="home-alerts-panel"
+            style={{ ...ctaSec, position:'relative' }}
+          >
+            <Icon name="bell" size={14}/> Alertes
+            {alerts.length > 0 && (
+              <span aria-label={`${alerts.length} alertes`} style={{
+                position:'absolute', top:-4, right:-4, minWidth:18, height:18, padding:'0 5px',
+                background:'var(--red)', color:'#0e1116', borderRadius:99, fontSize:10, fontWeight:700,
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>{alerts.length}</span>
+            )}
+          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => onCreateObjet?.()}
+              style={{...ctaPri, background: t.accent}}
+              title="Aller à Gestion et créer un objet"
+            >
+              <Icon name="plus" size={14}/> Nouvel objet
+            </button>
+          )}
         </div>
       </div>
+
+      {showAlerts && (
+        <div id="home-alerts-panel" className="rise" role="region" aria-label="Alertes maison" style={{
+          marginBottom:24, borderRadius:14, padding:'16px 20px',
+          background:'var(--surface)', border:`1px solid ${t.accent}40`,
+        }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+            <h3 className="display" style={{ fontSize:16 }}>Alertes ({alerts.length})</h3>
+            <button type="button" onClick={() => setShowAlerts(false)} aria-label="Fermer le panneau d'alertes" style={iconBtn}>
+              <Icon name="close" size={12}/>
+            </button>
+          </div>
+          {alerts.length === 0 ? (
+            <div style={{ fontSize:13, color:'var(--text-3)' }}>Tout va bien — aucune anomalie détectée.</div>
+          ) : (
+            <ul style={{ listStyle:'none', padding:0, margin:0, display:'flex', flexDirection:'column', gap:8 }}>
+              {alerts.slice(0, 8).map((a, i) => (
+                <li key={`${a.kind}-${a.obj.id}-${i}`}>
+                  <button
+                    type="button"
+                    onClick={() => openDetail(a.obj)}
+                    style={{
+                      width:'100%', display:'flex', alignItems:'center', gap:12,
+                      padding:'10px 12px', borderRadius:10, background:'var(--bg-2)', textAlign:'left',
+                    }}
+                  >
+                    <span style={{
+                      width:8, height:8, borderRadius:'50%',
+                      background: a.kind === 'battery' ? 'var(--red)' : 'var(--text-4)',
+                    }}/>
+                    <span style={{ flex:1, fontSize:13, color:'var(--text)' }}>
+                      <span className="mono" style={{ fontSize:10, marginRight:8, color: a.kind==='battery' ? 'var(--red)' : 'var(--text-3)' }}>
+                        {a.kind === 'battery' ? 'BATTERIE' : 'INACTIF'}
+                      </span>
+                      {a.obj.nom}
+                      <span className="mono" style={{ fontSize:10, color:'var(--text-4)', marginLeft:8 }}>
+                        {a.obj.pieceNom}{a.kind==='battery' && a.obj.batterie != null ? ` · ${a.obj.batterie}%` : ''}
+                      </span>
+                    </span>
+                    <Icon name="chevR" size={12}/>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {canManage && scenarios.length > 0 && (
+        <div className="rise" style={{ marginBottom:24 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+            <h3 className="display" style={{ fontSize:18 }}>Modes rapides</h3>
+            <span className="label">un clic — toute la maison réagit</span>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:`repeat(${Math.min(4, scenarios.length)}, 1fr)`, gap:10 }}>
+            {scenarios.slice(0, 4).map((s) => {
+              const running = runningScenarioId === s.id
+              const disabled = running || s.enabled === false
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  disabled={disabled}
+                  aria-label={`Exécuter le scénario ${s.nom}`}
+                  onClick={async () => {
+                    if (!onRunScenario) return
+                    setRunningScenarioId(s.id)
+                    try { await onRunScenario(s.id) } finally { setRunningScenarioId(null) }
+                  }}
+                  style={{
+                    position:'relative', overflow:'hidden',
+                    padding:'18px 20px', borderRadius:14,
+                    background: running ? 'var(--accent-soft)' : 'var(--surface)',
+                    border:`1px solid ${running ? t.accent : 'var(--line)'}`,
+                    color: 'var(--text)', textAlign:'left',
+                    display:'flex', flexDirection:'column', gap:8,
+                    transition:'transform .15s, border-color .15s',
+                    opacity: disabled && !running ? 0.5 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}
+                  onMouseEnter={(e)=>{ if(!disabled) e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={(e)=>{ e.currentTarget.style.transform = 'translateY(0)' }}
+                >
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                    <span style={{ fontSize:32, lineHeight:1 }} aria-hidden="true">{s.icon || '⚡'}</span>
+                    <span className="mono" style={{
+                      fontSize:9, padding:'2px 7px', borderRadius:99,
+                      background:'var(--bg-3)', color: s.type === 'SCHEDULED' ? t.accent : 'var(--text-3)',
+                    }}>{s.type === 'SCHEDULED' ? 'AUTO' : s.type === 'CONDITIONAL' ? 'TRIGGER' : 'MANUEL'}</span>
+                  </div>
+                  <div>
+                    <div className="display" style={{ fontSize:18, lineHeight:1.1 }}>{s.nom}</div>
+                    <div style={{ fontSize:11, color:'var(--text-3)', marginTop:4 }}>
+                      {running ? 'Exécution…' : (s.actions?.length || 0) + ' action' + ((s.actions?.length || 0) > 1 ? 's' : '')}
+                      {s.type === 'SCHEDULED' && s.cron && <> · {humanCron(s.cron)}</>}
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* KPI ROW */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
@@ -591,9 +956,9 @@ function SearchPage({ items, pieces, openDetail, t }) {
       </div>
 
       <div style={{ position:'relative', marginBottom:20 }}>
-        <Icon name="search" size={18}/>
         <input
           placeholder="Rechercher par nom, type, marque…"
+          aria-label="Rechercher par nom, type ou marque"
           value={filters.q}
           onChange={e=>setFilters({...filters, q:e.target.value})}
           style={{
@@ -602,7 +967,7 @@ function SearchPage({ items, pieces, openDetail, t }) {
             color:'var(--text)',
           }}
         />
-        <div style={{ position:'absolute', left:18, top:'50%', transform:'translateY(-50%)', color:'var(--text-3)' }}>
+        <div aria-hidden="true" style={{ position:'absolute', left:18, top:'50%', transform:'translateY(-50%)', color:'var(--text-3)' }}>
           <Icon name="search" size={18}/>
         </div>
       </div>
@@ -648,8 +1013,8 @@ function SearchPage({ items, pieces, openDetail, t }) {
 const selectStyle = { padding:'8px 12px', background:'var(--bg-2)', color:'var(--text)', border:'1px solid var(--line)', borderRadius:8, fontSize:13, cursor:'pointer' };
 
 /* ─── LOGIN / VISUALISATION ─────────────── */
-function VisualisationPage({ user, onLogin, onRegister, onLogout, onSessionRefresh, openDetail, t }) {
-  const [filters, setFilters] = useState({ service:'', etat:'', q:'' });
+function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSessionRefresh, openDetail, t }) {
+  const [filters, setFilters] = useState({ service:'', etat:'', pieceId:'', q:'' });
   const [profile, setProfile] = useState(user);
   const [services, setServices] = useState([]);
   const [items, setItems] = useState([]);
@@ -684,6 +1049,7 @@ function VisualisationPage({ user, onLogin, onRegister, onLogout, onSessionRefre
         const params = new URLSearchParams()
         if (filters.service) params.set('service', filters.service)
         if (filters.etat) params.set('etat', filters.etat)
+        if (filters.pieceId) params.set('pieceId', filters.pieceId)
         if (filters.q) params.set('q', filters.q)
         const url = params.toString() ? `/api/visualisation/objets?${params}` : '/api/visualisation/objets'
         const itemsData = await fetchJson(url)
@@ -700,7 +1066,9 @@ function VisualisationPage({ user, onLogin, onRegister, onLogout, onSessionRefre
         })
         setServices(Array.isArray(servicesData) ? servicesData : [])
         setItems(Array.isArray(itemsData) ? itemsData.map(toUiItem) : [])
-        onSessionRefresh?.()
+        // NB: do NOT call onSessionRefresh here — /profile already returns the
+        // updated points snapshot (and triggering setUser here would change the
+        // `user` prop reference and re-fire this effect → infinite loop).
       } catch (e) {
         if (!cancelled) {
           setError(e.message || 'Erreur de chargement')
@@ -714,7 +1082,9 @@ function VisualisationPage({ user, onLogin, onRegister, onLogout, onSessionRefre
     run()
 
     return () => { cancelled = true }
-  }, [user, filters.service, filters.etat, filters.q, onSessionRefresh])
+    // Key on user?.id (stable), not the user object whose reference flips on every setUser.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, filters.service, filters.etat, filters.pieceId, filters.q])
 
   if (!user) {
     return <LoginScreen onLogin={onLogin} onRegister={onRegister} t={t} />
@@ -811,21 +1181,31 @@ function VisualisationPage({ user, onLogin, onRegister, onLogout, onSessionRefre
         })}
       </div>
 
-      <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center', flexWrap:'wrap' }}>
         <input
           placeholder="Rechercher dans mes objets…"
+          aria-label="Rechercher dans mes objets"
           value={filters.q}
           onChange={e=>setFilters({...filters, q:e.target.value})}
-          style={{ flex:1, padding:'10px 14px', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:10, fontSize:14 }}
+          style={{ flex:1, minWidth:220, padding:'10px 14px', background:'var(--surface)', border:'1px solid var(--line)', borderRadius:10, fontSize:14 }}
         />
-        <select value={filters.service} onChange={e=>setFilters({...filters, service:e.target.value})} style={selectStyle}>
+        <select aria-label="Filtre par service" value={filters.service} onChange={e=>setFilters({...filters, service:e.target.value})} style={selectStyle}>
           <option value="">Tous services</option>
           {['Acces','Surveillance','Confort','Animal'].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select value={filters.etat} onChange={e=>setFilters({...filters, etat:e.target.value})} style={selectStyle}>
+        <select aria-label="Filtre par pièce" value={filters.pieceId} onChange={e=>setFilters({...filters, pieceId:e.target.value})} style={selectStyle}>
+          <option value="">Toutes pièces</option>
+          {(pieces?.length ? pieces : PIECES).map(p => <option key={p.id} value={String(p.id)}>{p.nom}</option>)}
+        </select>
+        <select aria-label="Filtre par état" value={filters.etat} onChange={e=>setFilters({...filters, etat:e.target.value})} style={selectStyle}>
           <option value="">Tous états</option>
           <option>ACTIF</option><option>INACTIF</option>
         </select>
+        {(filters.service || filters.pieceId || filters.etat || filters.q) && (
+          <button type="button" onClick={() => setFilters({ service:'', etat:'', pieceId:'', q:'' })} style={{ ...ctaSec, padding:'8px 12px', fontSize:12 }}>
+            Réinitialiser
+          </button>
+        )}
       </div>
 
       {error && <div style={{ marginBottom: 12, color: 'var(--red)', fontSize: 13 }}>{error}</div>}
@@ -895,12 +1275,17 @@ function LoginScreen({ onLogin, onRegister, t }) {
         <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:32 }}>
           <div style={{ fontSize:11, fontFamily:"'Geist Mono', monospace", textTransform:'uppercase', letterSpacing:'.08em', opacity:.6, marginBottom:4 }}>Profils de démo backend</div>
           {DEMO_CREDENTIALS.map((demo) => (
-            <button key={demo.email} onClick={()=>runLogin(demo.email, demo.motDePasse)}
-              style={{ padding:'12px 14px', background:'rgba(14,17,22,.85)', color:'#fff', borderRadius:10, display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:14, fontWeight:600 }}>{demo.email[0].toUpperCase()}</div>
+            <button
+              key={demo.email}
+              type="button"
+              onClick={() => runLogin(demo.email, demo.motDePasse)}
+              aria-label={`Se connecter en tant que ${demo.label}`}
+              style={{ padding:'12px 14px', background:'rgba(14,17,22,.85)', color:'#fff', borderRadius:10, display:'flex', alignItems:'center', gap:12 }}
+            >
+              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:14, fontWeight:600 }}>{demo.label[0]}</div>
               <div style={{ flex:1, textAlign:'left' }}>
-                <div style={{ fontSize:13, fontWeight:600 }}>{demo.email}</div>
-                <div style={{ fontSize:11, opacity:.6, fontFamily:"'Geist Mono', monospace" }}>mot de passe: demo1234</div>
+                <div style={{ fontSize:13, fontWeight:600 }}>{demo.label}</div>
+                <div style={{ fontSize:11, opacity:.7, fontFamily:"'Geist Mono', monospace" }}>{demo.email} · plafond {demo.niveauMax}</div>
               </div>
               <Icon name="chevR" size={14}/>
             </button>
@@ -975,30 +1360,43 @@ const inputStyle = {
 };
 
 /* ─── GESTION ──────────────────────────── */
-function GestionPage({ user, pieces, openDetail, t }) {
+function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandled, scenarios = [], onRunScenario, onScenariosChanged }) {
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState('');
   const [items, setItems] = useState([])
   const [history, setHistory] = useState([])
   const [stats, setStats] = useState(null)
+  const [myDeleteRequests, setMyDeleteRequests] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(initialGestionForm())
+
+  useEffect(() => {
+    if (openFormSignal && user?.niveauMax === 'Avancé') {
+      setEditing(null)
+      setForm(initialGestionForm())
+      setShowForm(true)
+      window.scrollTo({ top: 240, behavior: 'smooth' })
+      onFormHandled?.()
+    }
+  }, [openFormSignal, user?.niveauMax, onFormHandled])
 
   const loadGestion = async () => {
     if (!user || user.niveauMax !== 'Avancé') return
     setLoading(true)
     setError('')
     try {
-      const [objetsData, historyData, statsData] = await Promise.all([
+      const [objetsData, historyData, statsData, demandesData] = await Promise.all([
         fetchJson('/api/gestion/objets'),
         fetchJson('/api/gestion/historique?limit=40'),
-        fetchJson('/api/gestion/stats')
+        fetchJson('/api/gestion/stats'),
+        fetchJson('/api/gestion/demandes-suppression/mes-demandes').catch(() => [])
       ])
       setItems(Array.isArray(objetsData) ? objetsData.map(toUiItem) : [])
       setHistory(Array.isArray(historyData) ? historyData.map(historyToUiItem) : [])
       setStats(statsData)
+      setMyDeleteRequests(Array.isArray(demandesData) ? demandesData : [])
     } catch (e) {
       setError(e.message || 'Erreur chargement gestion')
     } finally {
@@ -1072,8 +1470,18 @@ function GestionPage({ user, pieces, openDetail, t }) {
     },
     delete: async (id) => {
       try {
-        await fetchJson(`/api/gestion/objets/${id}`, { method: 'DELETE' })
-        flash('Objet supprimé.')
+        const objet = items.find((x) => x.id === id)
+        if (user?.admin) {
+          await fetchJson(`/api/gestion/objets/${id}`, { method: 'DELETE' })
+          flash('Objet supprimé.')
+        } else {
+          const raison = window.prompt('Raison de la demande de suppression (optionnel) :', '')
+          await fetchJson(`/api/gestion/objets/${id}/demande-suppression`, {
+            method: 'POST',
+            body: JSON.stringify({ raison: raison || null })
+          })
+          flash(`Demande de suppression envoyée${objet ? ` pour ${objet.nom}` : ''}.`)
+        }
         await loadGestion()
       } catch (e) {
         setError(e.message)
@@ -1133,6 +1541,24 @@ function GestionPage({ user, pieces, openDetail, t }) {
         </div>
       )}
 
+      {!user?.admin && (
+        <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:14, marginBottom:16 }}>
+          <h3 className="display" style={{ fontSize:18, marginBottom:8 }}>Mes demandes de suppression</h3>
+          {myDeleteRequests.length === 0 && <p style={{ color:'var(--text-3)', fontSize:12 }}>Aucune demande pour le moment.</p>}
+          <div style={{ display:'grid', gap:8 }}>
+            {myDeleteRequests.slice(0, 5).map((r) => (
+              <div key={r.id} style={{ border:'1px solid var(--line)', borderRadius:10, padding:10, background:'var(--bg-2)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
+                  <strong style={{ fontSize:13 }}>{r.objetNom || 'Objet'}</strong>
+                  <span className="mono" style={{ fontSize:10, color: r.status === 'PENDING' ? t.accent : 'var(--text-3)' }}>{r.status}</span>
+                </div>
+                {r.noteAdmin && <div style={{ fontSize:11, color:'var(--text-3)', marginTop:4 }}>Note admin: {r.noteAdmin}</div>}
+              </div>
+            ))}
+          </div>
+        </article>
+      )}
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
         {[
           { l:'Total', v:stats?.totalObjets ?? items.length, c:'var(--text)', i:'grid' },
@@ -1190,10 +1616,19 @@ function GestionPage({ user, pieces, openDetail, t }) {
         <span className="label">Actions × objet</span>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:12, marginBottom:32 }}>
-        {items.map((o,i) => <DeviceTile key={o.id} obj={o} idx={i} onClick={()=>openDetail(o)} actions={acts}/>) }
+        {items.map((o) => <DeviceTile key={o.id} obj={o} onClick={()=>openDetail(o)} actions={acts}/>) }
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+      <RoutinesSection
+        scenarios={scenarios}
+        objets={items}
+        accent={t.accent}
+        onRun={onRunScenario}
+        onChanged={onScenariosChanged}
+        onError={(m) => setError(m)}
+      />
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
         <div style={{ borderRadius:18, padding:24, background:'var(--surface)', border:'1px solid var(--line)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
             <Icon name="chart" size={18}/>
@@ -1219,24 +1654,70 @@ function GestionPage({ user, pieces, openDetail, t }) {
 
         <div style={{ borderRadius:18, padding:24, background:'var(--surface)', border:'1px solid var(--line)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
+            <Icon name="grid" size={18}/>
+            <h3 className="display" style={{ fontSize:18 }}>Répartition par service</h3>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            {(stats?.parService?.length ? stats.parService : ['Acces','Surveillance','Confort','Animal'].map((c) => ({ code:c, libelle:c, objets: items.filter((o) => o.service === c).length }))).map((s) => {
+              const total = stats?.totalObjets ?? items.length
+              const pct = total ? Math.round((s.objets || 0) / total * 100) : 0
+              return (
+                <div key={s.code}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6 }}>
+                    <span style={{ fontSize:13, color:'var(--text)' }}>{s.libelle || s.code}</span>
+                    <span className="mono num" style={{ fontSize:11, color:'var(--text-3)' }}>{s.objets} ({pct}%)</span>
+                  </div>
+                  <div style={{ height:6, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${pct}%`, background: t.accent, borderRadius:99, transition:'width .4s' }}/>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:16 }}>
+
+        <div style={{ borderRadius:18, padding:24, background:'var(--surface)', border:'1px solid var(--line)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:18 }}>
             <Icon name="log" size={18}/>
             <h3 className="display" style={{ fontSize:18 }}>Historique · <span className="num" style={{color: t.accent}}>{history.length}</span></h3>
           </div>
           <div style={{ maxHeight:340, overflowY:'auto', display:'flex', flexDirection:'column', gap:10 }}>
             {history.slice().reverse().map(h => {
+              const isScenario = h.action === 'SCENARIO_RUN';
               const isNeg = h.action.includes('DELETE') || h.action.includes('SUPPR') || h.action.includes('DÉSACT') || h.action.includes('INACTIF');
-              const c = isNeg ? 'var(--red)' : (h.action.includes('LOGIN') || h.action.includes('CONNEXION') ? 'var(--blue)' : 'var(--green)');
+              const c = isScenario ? t.accent
+                : (isNeg ? 'var(--red)'
+                : (h.action.includes('LOGIN') || h.action.includes('CONNEXION') ? 'var(--blue)' : 'var(--green)'));
               return (
-                <div key={h.id} style={{ display:'flex', gap:12, alignItems:'flex-start', padding:'10px 12px', borderRadius:10, background:'var(--bg-2)' }}>
-                  <div style={{ width:6, height:6, borderRadius:'50%', background: c, marginTop:6, flexShrink:0 }}/>
+                <div key={h.id} style={{
+                  display:'flex', gap:12, alignItems:'flex-start',
+                  padding:'10px 12px', borderRadius:10,
+                  background: isScenario ? 'var(--accent-soft)' : 'var(--bg-2)',
+                  border: isScenario ? `1px solid ${t.accent}40` : '1px solid transparent',
+                }}>
+                  {isScenario ? (
+                    <span style={{ color: t.accent, marginTop:1, flexShrink:0 }}><Icon name="bolt" size={14}/></span>
+                  ) : (
+                    <div style={{ width:6, height:6, borderRadius:'50%', background: c, marginTop:6, flexShrink:0 }}/>
+                  )}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, color:'var(--text)', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                       <span className="mono" style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background:'var(--bg-3)', color: c }}>{h.action}</span>
-                      <span style={{ fontWeight:500 }}>{h.objetNom}</span>
+                      <span style={{ fontWeight: isScenario ? 600 : 500 }}>{isScenario ? (h.details || 'Scénario') : h.objetNom}</span>
                     </div>
-                    <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:3 }}>
-                      {h.code} · @{h.utilisateur} {h.details ? `· ${h.details}` : ''}
-                    </div>
+                    {!isScenario && (
+                      <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:3 }}>
+                        {h.code} · @{h.utilisateur} {h.details ? `· ${h.details}` : ''}
+                      </div>
+                    )}
+                    {isScenario && (
+                      <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:3 }}>
+                        @{h.utilisateur || 'system'}
+                      </div>
+                    )}
                   </div>
                   <div className="mono" style={{ fontSize:10, color:'var(--text-4)', whiteSpace:'nowrap' }}>{fmtTime(h.timestamp)}</div>
                 </div>
@@ -1247,6 +1728,411 @@ function GestionPage({ user, pieces, openDetail, t }) {
       </div>
     </div>
   );
+}
+
+/* ─── ROUTINES (Scénarios) ──────────────── */
+function RoutinesSection({ scenarios, objets, accent, onRun, onChanged, onError }) {
+  const [editing, setEditing] = useState(null) // null | 'new' | scenarioId
+  const [busyId, setBusyId] = useState(null)
+
+  const startCreate = () => setEditing('new')
+  const startEdit = (s) => setEditing(s.id)
+  const cancelEdit = () => setEditing(null)
+
+  const submit = async (payload, id) => {
+    try {
+      if (id) {
+        await fetchJson(`/api/gestion/scenarios/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
+      } else {
+        await fetchJson('/api/gestion/scenarios', { method: 'POST', body: JSON.stringify(payload) })
+      }
+      setEditing(null)
+      onChanged?.()
+    } catch (e) {
+      onError?.(e.message || 'Erreur lors de la sauvegarde du scénario')
+    }
+  }
+
+  const toggleEnabled = async (s) => {
+    setBusyId(s.id)
+    try {
+      await fetchJson(`/api/gestion/scenarios/${s.id}/enabled`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: !s.enabled })
+      })
+      onChanged?.()
+    } catch (e) {
+      onError?.(e.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const remove = async (s) => {
+    if (!window.confirm(`Supprimer le scénario « ${s.nom} » ?`)) return
+    try {
+      await fetchJson(`/api/gestion/scenarios/${s.id}`, { method: 'DELETE' })
+      onChanged?.()
+    } catch (e) {
+      onError?.(e.message)
+    }
+  }
+
+  return (
+    <section aria-label="Routines et scénarios" style={{ marginBottom:24 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14 }}>
+        <div>
+          <h3 className="display" style={{ fontSize:22 }}>Routines · <span className="num" style={{ color: accent }}>{scenarios.length}</span></h3>
+          <span className="label" style={{ color:'var(--text-3)' }}>scénarios programmables · manuels ou cron</span>
+        </div>
+        <button
+          type="button"
+          onClick={startCreate}
+          style={{ ...ctaPri, background: accent }}
+        >
+          <Icon name="plus" size={14}/> Nouveau scénario
+        </button>
+      </div>
+
+      {editing === 'new' && (
+        <RoutineEditor
+          objets={objets}
+          accent={accent}
+          onSubmit={(p) => submit(p, null)}
+          onCancel={cancelEdit}
+        />
+      )}
+
+      {scenarios.length === 0 && editing !== 'new' && (
+        <div style={{
+          padding:'40px 20px', borderRadius:14, background:'var(--surface)', border:'1px solid var(--line)',
+          textAlign:'center',
+        }}>
+          <div className="display-i" style={{ fontSize:24, color:'var(--text-3)', marginBottom:6 }}>aucun scénario</div>
+          <div style={{ fontSize:13, color:'var(--text-4)' }}>Créez un mode rapide ou une automatisation programmée.</div>
+        </div>
+      )}
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))', gap:12 }}>
+        {scenarios.map((s) => {
+          if (editing === s.id) {
+            return (
+              <RoutineEditor
+                key={s.id}
+                scenario={s}
+                objets={objets}
+                accent={accent}
+                onSubmit={(p) => submit(p, s.id)}
+                onCancel={cancelEdit}
+              />
+            )
+          }
+          const running = busyId === s.id
+          const isOff = s.enabled === false
+          return (
+            <article key={s.id} style={{
+              padding:'18px 20px', borderRadius:14,
+              background: 'var(--surface)',
+              border: `1px solid ${isOff ? 'var(--line)' : 'var(--line-2)'}`,
+              opacity: isOff ? 0.6 : 1,
+              display:'flex', flexDirection:'column', gap:14,
+            }}>
+              <header style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+                <span aria-hidden="true" style={{ fontSize:32, lineHeight:1 }}>{s.icon || '⚡'}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div className="display" style={{ fontSize:18, lineHeight:1.1 }}>{s.nom}</div>
+                  <div style={{ fontSize:11, color:'var(--text-3)', marginTop:4 }}>
+                    <span className="mono" style={{ marginRight:8, color: s.type === 'SCHEDULED' ? accent : 'var(--text-3)' }}>
+                      {s.type === 'SCHEDULED' ? 'AUTO' : s.type === 'CONDITIONAL' ? 'TRIGGER' : 'MANUEL'}
+                    </span>
+                    {s.type === 'SCHEDULED' && s.cron && humanCron(s.cron)}
+                    {s.type === 'CONDITIONAL' && (s.condition || 'condition libre')}
+                    {s.type === 'MANUAL' && 'sur demande'}
+                  </div>
+                  {s.description && (
+                    <div style={{ fontSize:12, color:'var(--text-2)', marginTop:8 }}>{s.description}</div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleEnabled(s)}
+                  disabled={running}
+                  aria-label={isOff ? 'Activer le scénario' : 'Désactiver le scénario'}
+                  title={isOff ? 'Activer' : 'Désactiver'}
+                  style={{
+                    width:36, height:20, borderRadius:99, position:'relative',
+                    background: isOff ? 'var(--bg-3)' : accent,
+                    transition:'background .2s',
+                  }}
+                >
+                  <span aria-hidden="true" style={{
+                    position:'absolute', top:2, left: isOff ? 2 : 18,
+                    width:16, height:16, borderRadius:99, background:'#fff',
+                    transition:'left .2s',
+                  }}/>
+                </button>
+              </header>
+
+              <div style={{ borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)', padding:'10px 12px' }}>
+                <div className="label" style={{ marginBottom:6 }}>{s.actions.length} action{s.actions.length > 1 ? 's' : ''}</div>
+                <ul style={{ listStyle:'none', padding:0, margin:0, display:'flex', flexDirection:'column', gap:4, maxHeight:120, overflowY:'auto' }}>
+                  {s.actions.length === 0 ? (
+                    <li style={{ fontSize:11, color:'var(--text-4)' }}>Aucune action — éditez pour en ajouter.</li>
+                  ) : s.actions.map((a) => (
+                    <li key={a.id} style={{ fontSize:12, color:'var(--text-2)', display:'flex', gap:8, alignItems:'center' }}>
+                      <span style={{ width:6, height:6, borderRadius:'50%', background: a.targetEtat === 'ACTIF' ? 'var(--green)' : 'var(--text-4)' }}/>
+                      <span style={{ flex:1 }}>{a.objetNom || `objet #${a.objetId}`}</span>
+                      <span className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>
+                        → {a.targetEtat}{a.targetPosition != null ? ` ${a.targetPosition}%` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <footer style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:6 }}>
+                <span className="mono" style={{ fontSize:10, color:'var(--text-4)' }}>
+                  {s.derniereExecution ? `Dernière : ${new Date(s.derniereExecution).toLocaleString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}` : 'jamais exécuté'}
+                </span>
+                <div style={{ display:'flex', gap:4 }}>
+                  <button type="button" onClick={() => onRun?.(s.id)} disabled={isOff} aria-label="Lancer le scénario" title="Lancer maintenant" style={{ ...iconBtn, color: accent }}>
+                    <Icon name="bolt" size={13}/>
+                  </button>
+                  <button type="button" onClick={() => startEdit(s)} aria-label="Modifier" title="Modifier" style={iconBtn}>
+                    <Icon name="edit" size={13}/>
+                  </button>
+                  <button type="button" onClick={() => remove(s)} aria-label="Supprimer" title="Supprimer" style={{ ...iconBtn, color:'var(--red)' }}>
+                    <Icon name="trash" size={13}/>
+                  </button>
+                </div>
+              </footer>
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/* ─── ROUTINE EDITOR ────────────────────── */
+function RoutineEditor({ scenario, objets, accent, onSubmit, onCancel }) {
+  const isEdit = !!scenario
+  const [form, setForm] = useState(() => ({
+    nom: scenario?.nom || '',
+    description: scenario?.description || '',
+    icon: scenario?.icon || '⚡',
+    type: scenario?.type || 'MANUAL',
+    cron: scenario?.cron || CRON_PRESETS[0].cron,
+    cronCustom: scenario && scenario.cron && !CRON_PRESETS.some((p) => p.cron === scenario.cron) ? scenario.cron : '',
+    condition: scenario?.condition || '',
+    enabled: scenario?.enabled !== false,
+    actions: (scenario?.actions || []).map((a) => ({
+      objetId: a.objetId,
+      targetEtat: a.targetEtat || 'ACTIF',
+      targetPosition: a.targetPosition,
+    })),
+  }))
+
+  const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }))
+
+  const addAction = () => {
+    setForm((f) => ({
+      ...f,
+      actions: [...f.actions, {
+        objetId: objets[0]?.id ?? null,
+        targetEtat: 'ACTIF',
+        targetPosition: null,
+      }]
+    }))
+  }
+  const updateAction = (i, patch) => {
+    setForm((f) => ({
+      ...f,
+      actions: f.actions.map((a, idx) => idx === i ? { ...a, ...patch } : a)
+    }))
+  }
+  const removeAction = (i) => {
+    setForm((f) => ({ ...f, actions: f.actions.filter((_, idx) => idx !== i) }))
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!form.nom.trim()) return
+
+    const cleanActions = form.actions
+      .filter((a) => a.objetId != null)
+      .map((a) => {
+        const obj = objets.find((o) => o.id === a.objetId)
+        const isOuvrant = obj?.branche === 'Ouvrant'
+        return {
+          objetId: Number(a.objetId),
+          targetEtat: a.targetEtat,
+          targetPosition: isOuvrant && a.targetPosition != null ? Number(a.targetPosition) : null,
+        }
+      })
+
+    const payload = {
+      nom: form.nom.trim(),
+      description: form.description.trim() || null,
+      icon: form.icon.trim() || null,
+      type: form.type,
+      cron: form.type === 'SCHEDULED' ? (form.cronCustom.trim() || form.cron) : null,
+      condition: form.type === 'CONDITIONAL' ? (form.condition.trim() || null) : null,
+      enabled: form.enabled,
+      actions: cleanActions,
+    }
+
+    onSubmit(payload)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rise" style={{
+      gridColumn:'1 / -1',
+      padding:'20px 24px', borderRadius:14,
+      background:'var(--surface)', border:`1px solid ${accent}40`,
+      display:'flex', flexDirection:'column', gap:16,
+    }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <h4 className="display" style={{ fontSize:20 }}>{isEdit ? <>Modifier <span className="display-i" style={{ color: accent }}>{scenario.nom}</span></> : 'Nouveau scénario'}</h4>
+        <button type="button" onClick={onCancel} style={iconBtn} aria-label="Annuler"><Icon name="close" size={14}/></button>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'80px 1fr 120px', gap:12 }}>
+        <Field label="Icône"><input maxLength={4} style={{ ...inputStyle, textAlign:'center', fontSize:22 }} value={form.icon} onChange={(e)=>setField('icon', e.target.value)}/></Field>
+        <Field label="Nom"><input required maxLength={80} style={inputStyle} value={form.nom} onChange={(e)=>setField('nom', e.target.value)}/></Field>
+        <Field label="Activé">
+          <label style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 14px', background:'var(--bg-2)', borderRadius:10, border:'1px solid var(--line)' }}>
+            <input type="checkbox" checked={form.enabled} onChange={(e)=>setField('enabled', e.target.checked)}/>
+            <span style={{ fontSize:13 }}>{form.enabled ? 'Oui' : 'Non'}</span>
+          </label>
+        </Field>
+      </div>
+
+      <Field label="Description (optionnel)">
+        <input maxLength={500} style={inputStyle} value={form.description} onChange={(e)=>setField('description', e.target.value)} placeholder="Ex : Ouverture matinale automatique"/>
+      </Field>
+
+      <div>
+        <div className="label" style={{ marginBottom:6 }}>Déclencheur</div>
+        <div style={{ display:'flex', gap:6 }}>
+          {SCENARIO_TYPES.map((tp) => (
+            <button
+              key={tp}
+              type="button"
+              onClick={() => setField('type', tp)}
+              aria-pressed={form.type === tp}
+              style={{
+                flex:1, padding:'10px 12px', borderRadius:10, fontSize:13,
+                background: form.type === tp ? accent : 'var(--bg-2)',
+                color: form.type === tp ? '#0e1116' : 'var(--text-2)',
+                border: `1px solid ${form.type === tp ? accent : 'var(--line)'}`,
+                fontWeight: form.type === tp ? 600 : 400,
+              }}
+            >{tp === 'MANUAL' ? 'Manuel' : tp === 'SCHEDULED' ? 'Programmé (cron)' : 'Conditionnel'}</button>
+          ))}
+        </div>
+      </div>
+
+      {form.type === 'SCHEDULED' && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <Field label="Préréglage">
+            <select style={inputStyle} value={form.cron} onChange={(e)=>setField('cron', e.target.value)}>
+              {CRON_PRESETS.map((p) => <option key={p.cron} value={p.cron}>{p.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Cron personnalisé (override)">
+            <input style={inputStyle} value={form.cronCustom} onChange={(e)=>setField('cronCustom', e.target.value)} placeholder="0 0 8 * * MON-FRI"/>
+          </Field>
+        </div>
+      )}
+
+      {form.type === 'CONDITIONAL' && (
+        <Field label="Condition (P7 — événement / contexte)">
+          <input style={inputStyle} value={form.condition} onChange={(e)=>setField('condition', e.target.value)} placeholder="Ex : night · MOTION_DETECTED · temp<18"/>
+        </Field>
+      )}
+
+      <div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          <div className="label">Actions ({form.actions.length})</div>
+          <button type="button" onClick={addAction} style={{ ...ctaSec, padding:'6px 12px', fontSize:12 }}>
+            <Icon name="plus" size={12}/> Ajouter une action
+          </button>
+        </div>
+        {form.actions.length === 0 ? (
+          <div style={{ padding:'14px', borderRadius:10, background:'var(--bg-2)', border:'1px dashed var(--line-2)', fontSize:12, color:'var(--text-3)', textAlign:'center' }}>
+            Aucune action — ajoutez au moins un objet à piloter.
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {form.actions.map((a, i) => {
+              const obj = objets.find((o) => o.id === a.objetId)
+              const isOuvrant = obj?.branche === 'Ouvrant'
+              return (
+                <div key={i} style={{
+                  display:'grid', gridTemplateColumns: isOuvrant ? '1.5fr 0.8fr 1fr 32px' : '1.5fr 0.8fr 32px',
+                  gap:8, alignItems:'center',
+                  padding:'8px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)',
+                }}>
+                  <select
+                    aria-label="Objet à piloter"
+                    style={{ ...inputStyle, padding:'8px 10px' }}
+                    value={a.objetId ?? ''}
+                    onChange={(e) => {
+                      const newId = Number(e.target.value)
+                      const newObj = objets.find((o) => o.id === newId)
+                      updateAction(i, {
+                        objetId: newId,
+                        targetPosition: newObj?.branche === 'Ouvrant' ? (a.targetPosition ?? 50) : null,
+                      })
+                    }}
+                  >
+                    {objets.map((o) => <option key={o.id} value={o.id}>{o.nom} · {o.pieceNom}</option>)}
+                  </select>
+                  <select
+                    aria-label="État cible"
+                    style={{ ...inputStyle, padding:'8px 10px' }}
+                    value={a.targetEtat}
+                    onChange={(e) => updateAction(i, { targetEtat: e.target.value })}
+                  >
+                    <option value="ACTIF">→ Actif</option>
+                    <option value="INACTIF">→ Inactif</option>
+                  </select>
+                  {isOuvrant && (
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <input
+                        type="range" min="0" max="100" step="5"
+                        aria-label="Position cible"
+                        value={a.targetPosition ?? 50}
+                        onChange={(e) => updateAction(i, { targetPosition: Number(e.target.value) })}
+                        style={{ flex:1, accentColor: accent }}
+                      />
+                      <span className="mono num" style={{ fontSize:11, color:'var(--text-3)', minWidth:32 }}>
+                        {a.targetPosition ?? 50}%
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeAction(i)}
+                    aria-label="Retirer l'action"
+                    style={{ ...iconBtn, color:'var(--red)' }}
+                  ><Icon name="trash" size={12}/></button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+        <button type="button" onClick={onCancel} style={ctaSec}>Annuler</button>
+        <button type="submit" style={{ ...ctaPri, background: accent }}>
+          {isEdit ? 'Enregistrer' : 'Créer'} <Icon name="arrow" size={13}/>
+        </button>
+      </div>
+    </form>
+  )
 }
 
 function initialGestionForm() {
@@ -1320,14 +2206,144 @@ function toNullableFloat(v) {
 }
 
 /* ─── APP SHELL ────────────────────────── */
+function AdminPage({ user, t, onChanged }) {
+  const [users, setUsers] = useState([])
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [usersData, reqData] = await Promise.all([
+        fetchJson('/api/admin/utilisateurs'),
+        fetchJson('/api/admin/demandes-suppression')
+      ])
+      setUsers(Array.isArray(usersData) ? usersData.map(toUiUser) : [])
+      setRequests(Array.isArray(reqData) ? reqData : [])
+    } catch (e) {
+      setError(e.message || 'Erreur module admin')
+      setUsers([])
+      setRequests([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (user?.admin) load()
+  }, [user?.id, user?.admin])
+
+  const decide = async (id, decision) => {
+    const note = window.prompt(
+      decision === 'approve' ? 'Note admin (optionnel) : suppression validée' : 'Note admin (optionnel) : raison du refus',
+      ''
+    )
+    try {
+      await fetchJson(`/api/admin/demandes-suppression/${id}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ decision, note: note || null })
+      })
+      await load()
+      onChanged?.()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const toggleAdmin = async (target) => {
+    try {
+      await fetchJson(`/api/admin/utilisateurs/${target.id}/admin`, {
+        method: 'PATCH',
+        body: JSON.stringify({ admin: !target.admin })
+      })
+      await load()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  if (!user?.admin) {
+    return (
+      <section className="rise" style={{ maxWidth:640 }}>
+        <h2 className="display" style={{ fontSize:30 }}>Administration</h2>
+        <p style={{ color:'var(--text-2)' }}>Accès refusé : compte admin requis.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="rise" style={{ display:'grid', gap:16 }}>
+      <header>
+        <div className="label" style={{ color:t.accent, marginBottom:8 }}>Module IV · administration</div>
+        <h2 className="display" style={{ fontSize:34 }}>Pilotage admin</h2>
+      </header>
+
+      {error && <div style={{ color:'var(--red)', fontSize:13 }}>{error}</div>}
+      {loading && <div style={{ color:'var(--text-3)', fontSize:12 }}>Chargement...</div>}
+
+      <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16 }}>
+        <h3 className="display" style={{ fontSize:20, marginBottom:10 }}>Demandes de suppression</h3>
+        <div style={{ display:'grid', gap:10 }}>
+          {requests.length === 0 && <p style={{ color:'var(--text-3)' }}>Aucune demande.</p>}
+          {requests.map((r) => (
+            <div key={r.id} style={{ border:'1px solid var(--line)', borderRadius:10, padding:12, background:'var(--bg-2)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', gap:12, alignItems:'center' }}>
+                <strong>{r.objetNom || 'Objet'}</strong>
+                <span className="mono" style={{ fontSize:11, color: r.status === 'PENDING' ? t.accent : 'var(--text-3)' }}>{r.status}</span>
+              </div>
+              <div style={{ fontSize:12, color:'var(--text-3)', marginTop:4 }}>Demandeur: {r.demandeurEmail || '-'}</div>
+              {r.raison && <div style={{ fontSize:12, color:'var(--text-2)', marginTop:4 }}>Raison: {r.raison}</div>}
+              {r.status === 'PENDING' && (
+                <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                  <button type="button" style={{ ...ctaPri, background:'var(--green)' }} onClick={() => decide(r.id, 'approve')}>Approuver</button>
+                  <button type="button" style={{ ...ctaSec, color:'var(--red)', borderColor:'var(--red)40' }} onClick={() => decide(r.id, 'reject')}>Refuser</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16 }}>
+        <h3 className="display" style={{ fontSize:20, marginBottom:10 }}>Utilisateurs</h3>
+        <div style={{ display:'grid', gap:8 }}>
+          {users.map((u) => (
+            <div key={u.id} style={{ border:'1px solid var(--line)', borderRadius:10, padding:12, background:'var(--bg-2)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10 }}>
+              <div>
+                <div style={{ fontSize:13, color:'var(--text)' }}>{u.prenom} {u.nom} · {u.email}</div>
+                <div style={{ fontSize:11, color:'var(--text-3)' }}>{u.typeMembre} · {u.niveau}</div>
+              </div>
+              <button type="button" onClick={() => toggleAdmin(u)} style={{ ...(u.admin ? ctaSec : ctaPri), background: u.admin ? undefined : t.accent }}>
+                {u.admin ? 'Retirer admin' : 'Passer admin'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </article>
+    </section>
+  )
+}
+
+const APP_THEME = { accent: ACCENT, houseName: HOUSE_NAME }
+
 function App() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const t = APP_THEME
   const [page, setPage] = useState('home');
   const [user, setUser] = useState(null);
   const [items, setItems] = useState([]);
   const [pieces, setPieces] = useState(PIECES);
   const [detail, setDetail] = useState(null);
   const [health, setHealth] = useState({ state: 'loading' })
+  const [gestionFormSignal, setGestionFormSignal] = useState(0)
+  const [scenarios, setScenarios] = useState([])
+  const [toast, setToast] = useState(null) // { kind: 'success'|'error', message: string }
+  const canManage = user?.niveauMax === 'Avancé'
+  const visiblePages = useMemo(
+    () => PAGES.filter((p) => !p.adminOnly || user?.admin),
+    [user?.admin]
+  )
 
   const refreshSession = async () => {
     try {
@@ -1363,10 +2379,32 @@ function App() {
     }
   }
 
+  const refreshScenarios = async () => {
+    try {
+      const data = await fetchJson('/api/gestion/scenarios')
+      setScenarios(Array.isArray(data) ? data : [])
+    } catch {
+      setScenarios([])
+    }
+  }
+
+  const showToast = (kind, message) => {
+    setToast({ kind, message })
+    setTimeout(() => setToast(null), 3500)
+  }
+
   useEffect(() => {
     refreshSession()
     refreshPublic()
   }, [])
+
+  useEffect(() => {
+    if (canManage) {
+      refreshScenarios()
+    } else {
+      setScenarios([])
+    }
+  }, [canManage])
 
   const handleLogin = async ({ email, motDePasse }) => {
     const data = await fetchJson('/api/auth/login', {
@@ -1393,6 +2431,76 @@ function App() {
     setDetail(o);
   };
 
+  const triggerCreateObjet = () => {
+    if (!canManage) {
+      setPage('visualisation')
+      return
+    }
+    setPage('gestion')
+    setGestionFormSignal((n) => n + 1)
+  }
+
+  const invokeMethod = async (obj, method) => {
+    const target = methodToEtat(method)
+    if (!target) return
+    try {
+      await fetchJson(`/api/gestion/objets/${obj.id}/etat`, {
+        method: 'PATCH',
+        body: JSON.stringify({ actif: target === 'ACTIF' })
+      })
+      await refreshPublic()
+      setDetail((current) => current && current.id === obj.id ? { ...current, etat: target } : current)
+      showToast('success', `${obj.nom} → ${target.toLowerCase()}`)
+    } catch (e) {
+      showToast('error', `Action impossible : ${e.message}`)
+    }
+  }
+
+  // Used by the position slider in DetailDrawer (and reusable for other partial updates).
+  const updateObjet = async (obj, patch) => {
+    try {
+      const detailDto = await fetchJson(`/api/gestion/objets/${obj.id}`)
+      const payload = {
+        type: detailDto.type,
+        nom: detailDto.nom,
+        marque: detailDto.marque,
+        pieceId: detailDto.pieceId,
+        etat: detailDto.etat,
+        connectivite: detailDto.connectivite,
+        batterie: detailDto.batterie,
+        position: detailDto.position,
+        zone: detailDto.zone,
+        cycle: detailDto.cycle,
+        consoEnergie: detailDto.consoEnergie,
+        niveau: detailDto.niveau,
+        animal: detailDto.animal,
+        ...patch,
+      }
+      await fetchJson(`/api/gestion/objets/${obj.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      })
+      await refreshPublic()
+      setDetail((current) => current && current.id === obj.id ? toUiItem({ ...current, ...patch }) : current)
+      showToast('success', `${obj.nom} mis à jour`)
+    } catch (e) {
+      showToast('error', `Mise à jour impossible : ${e.message}`)
+    }
+  }
+
+  const runScenario = async (scenarioId) => {
+    try {
+      const result = await fetchJson(`/api/gestion/scenarios/${scenarioId}/run`, { method: 'POST' })
+      const label = result?.scenarioNom || 'Scénario'
+      const n = result?.actionsApplied ?? 0
+      showToast('success', `${label} exécuté · ${n} action${n > 1 ? 's' : ''}`)
+      await refreshPublic()
+      await refreshScenarios()
+    } catch (e) {
+      showToast('error', `Exécution impossible : ${e.message}`)
+    }
+  }
+
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', t.accent);
     document.documentElement.style.setProperty('--accent-soft', t.accent + '1f');
@@ -1401,9 +2509,23 @@ function App() {
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [page]);
 
+  useEffect(() => {
+    if (page === 'admin' && !user?.admin) {
+      setPage('home')
+    }
+  }, [page, user?.admin])
+
   const renderPage = () => {
     const props = { user, items, pieces, openDetail, t, health };
-    if (page==='home') return <HomePage {...props} />;
+    if (page==='home') return (
+      <HomePage
+        {...props}
+        canManage={canManage}
+        onCreateObjet={triggerCreateObjet}
+        scenarios={scenarios}
+        onRunScenario={runScenario}
+      />
+    );
     if (page==='recherche') return <SearchPage {...props} />;
     if (page==='visualisation') return (
       <VisualisationPage
@@ -1414,19 +2536,38 @@ function App() {
         onSessionRefresh={refreshSession}
       />
     )
-    if (page==='gestion') return <GestionPage {...props} />;
+    if (page==='gestion') return (
+      <GestionPage
+        {...props}
+        openFormSignal={gestionFormSignal}
+        onFormHandled={() => setGestionFormSignal(0)}
+        scenarios={scenarios}
+        onRunScenario={runScenario}
+        onScenariosChanged={refreshScenarios}
+      />
+    );
+    if (page==='admin') return <AdminPage user={user} t={t} onChanged={refreshPublic} />
     return null
   };
 
   return (
     <div style={{ minHeight:'100vh', display:'grid', gridTemplateColumns:'240px 1fr', position:'relative', zIndex:1 }}>
-      <aside style={{
+      <a href="#main-content" className="skip-link" style={{
+        position:'absolute', left:8, top:8, zIndex:1000, padding:'8px 14px',
+        background:'var(--accent)', color:'#0e1116', borderRadius:8, fontWeight:600,
+        transform:'translateY(-200%)', transition:'transform .2s',
+      }}
+        onFocus={(e)=>{ e.currentTarget.style.transform = 'translateY(0)' }}
+        onBlur={(e)=>{ e.currentTarget.style.transform = 'translateY(-200%)' }}
+      >Aller au contenu principal</a>
+
+      <aside aria-label="Navigation principale" style={{
         background:'var(--bg-2)', borderRight:'1px solid var(--line)',
         padding:'24px 16px', display:'flex', flexDirection:'column',
         position:'sticky', top:0, height:'100vh',
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:32, padding:'0 8px' }}>
-          <div style={{
+          <div aria-hidden="true" style={{
             width:36, height:36, borderRadius:10,
             background:`linear-gradient(135deg, ${t.accent}, #ff8a47)`,
             display:'flex', alignItems:'center', justifyContent:'center', color:'#0e1116',
@@ -1438,22 +2579,29 @@ function App() {
           </div>
         </div>
 
-        <nav style={{ display:'flex', flexDirection:'column', gap:2 }}>
-          {PAGES.map(p => {
+        <nav aria-label="Modules" style={{ display:'flex', flexDirection:'column', gap:2 }}>
+          {visiblePages.map(p => {
             const active = page === p.id;
             const locked = p.id === 'gestion' && user && user.niveauMax !== 'Avancé';
             return (
-              <button key={p.id} onClick={()=>setPage(p.id)} style={{
-                padding:'10px 12px', borderRadius:10, display:'flex', alignItems:'center', gap:12,
-                background: active ? 'var(--surface)' : 'transparent',
-                color: active ? 'var(--text)' : (locked ? 'var(--text-4)' : 'var(--text-2)'),
-                fontSize:13, fontWeight: active ? 500 : 400, transition:'all .15s',
-                border: active ? '1px solid var(--line-2)' : '1px solid transparent',
-              }}>
+              <button
+                key={p.id}
+                type="button"
+                onClick={()=>setPage(p.id)}
+                aria-current={active ? 'page' : undefined}
+                aria-label={locked ? `${p.label} — verrouillé (niveau Avancé requis)` : p.label}
+                style={{
+                  padding:'10px 12px', borderRadius:10, display:'flex', alignItems:'center', gap:12,
+                  background: active ? 'var(--surface)' : 'transparent',
+                  color: active ? 'var(--text)' : (locked ? 'var(--text-4)' : 'var(--text-2)'),
+                  fontSize:13, fontWeight: active ? 500 : 400, transition:'all .15s',
+                  border: active ? '1px solid var(--line-2)' : '1px solid transparent',
+                }}
+              >
                 <Icon name={p.icon} size={16}/>
                 <span style={{ flex:1, textAlign:'left' }}>{p.label}</span>
                 {locked && <Icon name="lock" size={11}/>}
-                {active && <span style={{ width:4, height:4, borderRadius:'50%', background: t.accent, boxShadow:`0 0 6px ${t.accent}` }}/>} 
+                {active && <span aria-hidden="true" style={{ width:4, height:4, borderRadius:'50%', background: t.accent, boxShadow:`0 0 6px ${t.accent}` }}/>}
               </button>
             );
           })}
@@ -1462,40 +2610,53 @@ function App() {
         <div style={{ marginTop:'auto', padding:'14px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)' }}>
           {user ? (
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:13, fontWeight:600 }}>{user.photo}</div>
+              <div aria-hidden="true" style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:13, fontWeight:600 }}>{user.photo}</div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
                 <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts</div>
               </div>
-              <button onClick={handleLogout} style={iconBtn}><Icon name="power" size={12}/></button>
+              <button type="button" onClick={handleLogout} aria-label="Se déconnecter" style={iconBtn}><Icon name="power" size={12}/></button>
             </div>
           ) : (
-            <button onClick={()=>setPage('visualisation')} style={{ width:'100%', padding:'8px', fontSize:12, color:'var(--text-2)', display:'flex', alignItems:'center', gap:8 }}>
+            <button type="button" onClick={()=>setPage('visualisation')} style={{ width:'100%', padding:'8px', fontSize:12, color:'var(--text-2)', display:'flex', alignItems:'center', gap:8 }}>
               <Icon name="user" size={14}/> Se connecter
             </button>
           )}
         </div>
 
-        <div className="mono" style={{ fontSize:9, color:'var(--text-4)', marginTop:14, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-          <span style={{ width:6, height:6, borderRadius:'50%', background: health.state === 'ok' ? 'var(--green)' : 'var(--red)' }}/>
+        <div role="status" aria-live="polite" className="mono" style={{ fontSize:9, color:'var(--text-4)', marginTop:14, textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+          <span aria-hidden="true" style={{ width:6, height:6, borderRadius:'50%', background: health.state === 'ok' ? 'var(--green)' : 'var(--red)' }}/>
           {health.state === 'ok' ? 'Backend en ligne · v4.0' : 'Backend injoignable'}
         </div>
       </aside>
 
-      <main style={{ padding:'40px 48px 80px', maxWidth: 1320, width:'100%' }}>
+      <main id="main-content" style={{ padding:'40px 48px 80px', maxWidth: 1320, width:'100%' }}>
         {renderPage()}
       </main>
 
-      <DetailDrawer obj={detail} onClose={()=>setDetail(null)}/>
+      <DetailDrawer
+        obj={detail}
+        onClose={()=>setDetail(null)}
+        canManage={canManage}
+        onMethodInvoke={invokeMethod}
+        onUpdateObjet={updateObjet}
+        t={t}
+      />
 
-      <TweaksPanel>
-        <TweakSection label="Identité"/>
-        <TweakText label="Nom de la maison" value={t.houseName} onChange={(v)=>setTweak('houseName', v)}/>
-        <TweakSection label="Couleur"/>
-        <TweakColor label="Accent" value={t.accent} onChange={(v)=>setTweak('accent', v)}/>
-        <TweakSection label="Apparence"/>
-        <TweakToggle label="Densité compacte" value={t.compact} onChange={(v)=>setTweak('compact', v)}/>
-      </TweaksPanel>
+      {toast && (
+        <div role="status" aria-live="polite" className="rise" style={{
+          position:'fixed', bottom:24, right:24, zIndex:300,
+          padding:'14px 20px', borderRadius:12, minWidth:260, maxWidth:400,
+          background: toast.kind === 'error' ? 'var(--red-soft)' : 'var(--green-soft)',
+          border: `1px solid ${toast.kind === 'error' ? 'var(--red)' : 'var(--green)'}40`,
+          color: toast.kind === 'error' ? 'var(--red)' : 'var(--green)',
+          display:'flex', alignItems:'center', gap:12, fontSize:13,
+          boxShadow:'0 12px 40px rgba(0,0,0,.4)',
+        }}>
+          <Icon name={toast.kind === 'error' ? 'close' : 'bell'} size={14}/>
+          <span style={{ flex:1, color:'var(--text)' }}>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }

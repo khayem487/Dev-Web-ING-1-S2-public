@@ -1,18 +1,23 @@
 package com.projdevweb.controller;
 
+import com.projdevweb.dto.DonneeCapteurDTO;
+import com.projdevweb.dto.DemandeSuppressionCreateRequest;
+import com.projdevweb.dto.DemandeSuppressionDTO;
 import com.projdevweb.dto.GestionEtatRequest;
-import com.projdevweb.dto.GestionHistoriqueDTO;
 import com.projdevweb.dto.GestionObjetDetailDTO;
 import com.projdevweb.dto.GestionObjetUpsertRequest;
 import com.projdevweb.dto.GestionStatsDTO;
+import com.projdevweb.dto.HistoriqueActionDTO;
 import com.projdevweb.dto.ObjetConnecteDTO;
 import com.projdevweb.dto.ServiceSummaryDTO;
+import com.projdevweb.model.ActionType;
 import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
 import com.projdevweb.model.Connectivite;
+import com.projdevweb.model.DemandeSuppression;
+import com.projdevweb.model.DemandeSuppressionStatus;
 import com.projdevweb.model.Eau;
 import com.projdevweb.model.Etat;
-import com.projdevweb.model.GestionHistorique;
 import com.projdevweb.model.LaveLinge;
 import com.projdevweb.model.Nourriture;
 import com.projdevweb.model.ObjetConnecte;
@@ -23,15 +28,18 @@ import com.projdevweb.model.Television;
 import com.projdevweb.model.Thermostat;
 import com.projdevweb.model.Utilisateur;
 import com.projdevweb.model.Volet;
-import com.projdevweb.repository.GestionHistoriqueRepository;
+import com.projdevweb.repository.DemandeSuppressionRepository;
+import com.projdevweb.repository.DonneeCapteurRepository;
+import com.projdevweb.repository.HistoriqueActionRepository;
 import com.projdevweb.repository.ObjetConnecteRepository;
 import com.projdevweb.repository.PieceRepository;
-import com.projdevweb.repository.UtilisateurRepository;
+import com.projdevweb.repository.ScenarioActionRepository;
+import com.projdevweb.service.PointsService;
 import com.projdevweb.service.SessionUtilisateurService;
 import jakarta.servlet.http.HttpSession;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,45 +58,60 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Module Gestion : réservé aux utilisateurs niveau {@code AVANCE}
+ * (uniquement {@code ParentFamille} avec ≥10 points).
+ *
+ * <p>La garde est centralisée via {@link SessionUtilisateurService#requireAvance(HttpSession)} :
+ * 401 si non connecté, 403 si niveau insuffisant.
+ */
 @RestController
 @RequestMapping("/api/gestion")
 public class GestionController {
 
     private final ObjetConnecteRepository objetConnecteRepository;
     private final PieceRepository pieceRepository;
-    private final GestionHistoriqueRepository gestionHistoriqueRepository;
-    private final UtilisateurRepository utilisateurRepository;
+    private final DemandeSuppressionRepository demandeSuppressionRepository;
+    private final HistoriqueActionRepository historiqueActionRepository;
+    private final DonneeCapteurRepository donneeCapteurRepository;
+    private final ScenarioActionRepository scenarioActionRepository;
     private final SessionUtilisateurService sessionUtilisateurService;
+    private final PointsService pointsService;
 
     public GestionController(ObjetConnecteRepository objetConnecteRepository,
                              PieceRepository pieceRepository,
-                             GestionHistoriqueRepository gestionHistoriqueRepository,
-                             UtilisateurRepository utilisateurRepository,
-                             SessionUtilisateurService sessionUtilisateurService) {
+                             DemandeSuppressionRepository demandeSuppressionRepository,
+                             HistoriqueActionRepository historiqueActionRepository,
+                             DonneeCapteurRepository donneeCapteurRepository,
+                             ScenarioActionRepository scenarioActionRepository,
+                             SessionUtilisateurService sessionUtilisateurService,
+                             PointsService pointsService) {
         this.objetConnecteRepository = objetConnecteRepository;
         this.pieceRepository = pieceRepository;
-        this.gestionHistoriqueRepository = gestionHistoriqueRepository;
-        this.utilisateurRepository = utilisateurRepository;
+        this.demandeSuppressionRepository = demandeSuppressionRepository;
+        this.historiqueActionRepository = historiqueActionRepository;
+        this.donneeCapteurRepository = donneeCapteurRepository;
+        this.scenarioActionRepository = scenarioActionRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
+        this.pointsService = pointsService;
     }
 
     @GetMapping("/objets")
     public List<ObjetConnecteDTO> objets(HttpSession session) {
-        sessionUtilisateurService.requireUser(session);
+        sessionUtilisateurService.requireAvance(session);
         return objetConnecteRepository.findAll().stream().map(ObjetConnecteDTO::from).toList();
     }
 
     @GetMapping("/objets/{id}")
     public GestionObjetDetailDTO objetDetail(@PathVariable Long id, HttpSession session) {
-        sessionUtilisateurService.requireUser(session);
-        ObjetConnecte objet = getObjet(id);
-        return GestionObjetDetailDTO.from(objet);
+        sessionUtilisateurService.requireAvance(session);
+        return GestionObjetDetailDTO.from(getObjet(id));
     }
 
     @PostMapping("/objets")
     public GestionObjetDetailDTO createObjet(@Valid @RequestBody GestionObjetUpsertRequest request,
                                              HttpSession session) {
-        Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
         Piece piece = getPieceRequired(request.pieceId());
 
         ObjetConnecte objet = buildByType(request, piece);
@@ -97,10 +120,9 @@ public class GestionController {
 
         ObjetConnecte saved = objetConnecteRepository.save(objet);
 
-        utilisateur.addPoints(8);
-        utilisateurRepository.save(utilisateur);
+        pointsService.record(utilisateur, ActionType.CREATE_OBJET, saved,
+                "Création " + saved.getClass().getSimpleName() + " '" + saved.getNom() + "'");
 
-        logAction("CREATE", saved, utilisateur, "Création objet connecté");
         return GestionObjetDetailDTO.from(saved);
     }
 
@@ -108,7 +130,7 @@ public class GestionController {
     public GestionObjetDetailDTO updateObjet(@PathVariable Long id,
                                              @Valid @RequestBody GestionObjetUpsertRequest request,
                                              HttpSession session) {
-        Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
         ObjetConnecte objet = getObjet(id);
 
         Piece piece = request.pieceId() != null ? getPieceRequired(request.pieceId()) : objet.getPiece();
@@ -118,10 +140,9 @@ public class GestionController {
 
         ObjetConnecte saved = objetConnecteRepository.save(objet);
 
-        utilisateur.addPoints(4);
-        utilisateurRepository.save(utilisateur);
+        pointsService.record(utilisateur, ActionType.UPDATE_OBJET, saved,
+                "Mise à jour paramètres '" + saved.getNom() + "'");
 
-        logAction("UPDATE", saved, utilisateur, "Mise à jour paramètres objet");
         return GestionObjetDetailDTO.from(saved);
     }
 
@@ -129,38 +150,77 @@ public class GestionController {
     public GestionObjetDetailDTO toggleEtat(@PathVariable Long id,
                                             @RequestBody GestionEtatRequest request,
                                             HttpSession session) {
-        Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
         ObjetConnecte objet = getObjet(id);
 
         objet.setEtat(request.actif() ? Etat.ACTIF : Etat.INACTIF);
         ObjetConnecte saved = objetConnecteRepository.save(objet);
 
-        utilisateur.addPoints(2);
-        utilisateurRepository.save(utilisateur);
+        pointsService.record(utilisateur, ActionType.TOGGLE_ETAT, saved,
+                saved.getNom() + " → " + saved.getEtat());
 
-        logAction("TOGGLE_ETAT", saved, utilisateur, "Etat -> " + saved.getEtat());
         return GestionObjetDetailDTO.from(saved);
     }
 
     @DeleteMapping("/objets/{id}")
+    @Transactional
     public Map<String, Object> deleteObjet(@PathVariable Long id, HttpSession session) {
-        Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
         ObjetConnecte objet = getObjet(id);
 
-        String details = "Suppression objet";
-        logAction("DELETE", objet, utilisateur, details);
+        // 1. Log AVANT suppression (snapshot conservé même si l'objet disparaît)
+        pointsService.record(utilisateur, ActionType.DELETE_OBJET, objet,
+                "Suppression '" + objet.getNom() + "'");
 
+        // 2. Détacher la FK objet sur les anciennes traces (préserve les snapshots)
+        historiqueActionRepository.detachObjet(objet);
+
+        // 3. Supprimer les actions de scénario qui ciblaient cet objet (FK NOT NULL)
+        scenarioActionRepository.deleteByObjet(objet);
+
+        // 4. Supprimer les données capteur (FK NOT NULL)
+        donneeCapteurRepository.deleteByObjet(objet);
+
+        // 5. Supprimer l'objet lui-même
         objetConnecteRepository.delete(objet);
-
-        utilisateur.addPoints(3);
-        utilisateurRepository.save(utilisateur);
 
         return Map.of("ok", true, "deletedId", id);
     }
 
+    @PostMapping("/objets/{id}/demande-suppression")
+    public DemandeSuppressionDTO demanderSuppression(@PathVariable Long id,
+                                                     @RequestBody(required = false) DemandeSuppressionCreateRequest request,
+                                                     HttpSession session) {
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
+        ObjetConnecte objet = getObjet(id);
+
+        if (demandeSuppressionRepository.existsByDemandeurAndObjetAndStatus(
+                utilisateur, objet, DemandeSuppressionStatus.PENDING)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Une demande en attente existe déjà pour cet objet");
+        }
+
+        String raison = request != null ? trimToNull(request.raison()) : null;
+        DemandeSuppression demande = new DemandeSuppression(objet, utilisateur, raison);
+        DemandeSuppression saved = demandeSuppressionRepository.save(demande);
+
+        pointsService.record(utilisateur, ActionType.REQUEST_DELETE, objet,
+                "Demande suppression objet '" + objet.getNom() + "'");
+
+        return DemandeSuppressionDTO.from(saved);
+    }
+
+    @GetMapping("/demandes-suppression/mes-demandes")
+    public List<DemandeSuppressionDTO> mesDemandes(HttpSession session) {
+        Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        return demandeSuppressionRepository.findAllByDemandeurOrderByCreatedAtDesc(utilisateur).stream()
+                .map(DemandeSuppressionDTO::from)
+                .toList();
+    }
+
     @GetMapping("/stats")
     public GestionStatsDTO stats(HttpSession session) {
-        sessionUtilisateurService.requireUser(session);
+        sessionUtilisateurService.requireAvance(session);
 
         List<ObjetConnecteDTO> objets = objetConnecteRepository.findAll().stream()
                 .map(ObjetConnecteDTO::from)
@@ -171,6 +231,7 @@ public class GestionController {
         long inactifs = total - actifs;
 
         List<GestionStatsDTO.PieceCountDTO> parPiece = objets.stream()
+                .filter(o -> o.pieceNom() != null)
                 .collect(Collectors.groupingBy(ObjetConnecteDTO::pieceNom, Collectors.counting()))
                 .entrySet().stream()
                 .map(e -> new GestionStatsDTO.PieceCountDTO(e.getKey(), e.getValue()))
@@ -193,20 +254,38 @@ public class GestionController {
                 inactifs,
                 parPiece,
                 parService,
-                gestionHistoriqueRepository.count()
+                historiqueActionRepository.count()
         );
     }
 
     @GetMapping("/historique")
-    public List<GestionHistoriqueDTO> historique(@RequestParam(defaultValue = "25") int limit,
-                                                  HttpSession session) {
-        sessionUtilisateurService.requireUser(session);
+    public List<HistoriqueActionDTO> historique(@RequestParam(defaultValue = "25") int limit,
+                                                HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
         int safeLimit = Math.max(1, Math.min(limit, 100));
-        return gestionHistoriqueRepository.findAll(PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "timestamp")))
+        return historiqueActionRepository
+                .findAllByOrderByTimestampDesc(PageRequest.of(0, safeLimit))
                 .getContent().stream()
-                .map(GestionHistoriqueDTO::from)
+                .map(HistoriqueActionDTO::from)
                 .toList();
     }
+
+    /**
+     * Dernières mesures {@code DonneeCapteur} pour un objet (typiquement un
+     * Capteur — Thermostat / Camera). Sert au sparkline du DetailDrawer côté UI.
+     * Ordre chronologique croissant (ancien → récent) pour faciliter le rendu.
+     */
+    @GetMapping("/objets/{id}/donnees")
+    public List<DonneeCapteurDTO> donnees(@PathVariable Long id, HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
+        ObjetConnecte objet = getObjet(id);
+        return donneeCapteurRepository.findTop20ByObjetOrderByTimestampDesc(objet).stream()
+                .sorted((a, b) -> a.getTimestamp().compareTo(b.getTimestamp()))
+                .map(DonneeCapteurDTO::from)
+                .toList();
+    }
+
+    // ---------- helpers ----------
 
     private ObjetConnecte buildByType(GestionObjetUpsertRequest request, Piece piece) {
         String type = normalize(request.type());
@@ -307,19 +386,6 @@ public class GestionController {
                 eau.setAnimal(trimToNull(request.animal()));
             }
         }
-    }
-
-    private void logAction(String action, ObjetConnecte objet, Utilisateur utilisateur, String details) {
-        GestionHistorique entry = new GestionHistorique(
-                action,
-                objet.getId(),
-                objet.getNom(),
-                objet.getClass().getSimpleName(),
-                objet.getPiece() != null ? objet.getPiece().getNom() : null,
-                utilisateur.getEmail(),
-                details
-        );
-        gestionHistoriqueRepository.save(entry);
     }
 
     private ObjetConnecte getObjet(Long id) {

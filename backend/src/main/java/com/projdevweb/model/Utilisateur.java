@@ -1,70 +1,126 @@
 package com.projdevweb.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorColumn;
+import jakarta.persistence.DiscriminatorType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.Instant;
 
+/**
+ * Utilisateur abstrait — base SINGLE_TABLE pour {@link Enfant},
+ * {@link ParentFamille} et {@link VoisinVisiteur}.
+ *
+ * <p>Champs publics : {@code prenom}, {@code nom}, {@code pseudo}, {@code bioPublique}.
+ * <p>Champs privés  : {@code email}, {@code motDePasse} (BCrypt), {@code telephonePrive}, {@code adressePrivee}.
+ *
+ * <p>Le {@code niveau} est dérivé des {@code points} et clampé au niveauMax du sous-type.
+ */
 @Entity
 @Table(name = "utilisateur")
-public class Utilisateur {
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "type_membre", discriminatorType = DiscriminatorType.STRING, length = 32)
+public abstract class Utilisateur {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 80)
     private String prenom;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 80)
     private String nom;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, unique = true, length = 160)
     private String email;
 
-    @Column(nullable = false)
+    /** Hash BCrypt du mot de passe — jamais en clair. */
+    @Column(nullable = false, length = 100)
     private String motDePasse;
 
+    @Column(length = 80)
     private String pseudo;
 
     @Column(length = 1000)
     private String bioPublique;
 
+    @Column(length = 30)
     private String telephonePrive;
 
     @Column(length = 500)
     private String adressePrivee;
 
+    /** Points cumulés (Float pour autoriser les +0.25/+0.50). */
     @Column(nullable = false)
-    private Integer points = 0;
+    private Float points = 0f;
 
     @Column(nullable = false)
-    private Integer niveau = 1;
+    private Integer nbConnexions = 0;
+
+    /**
+     * Drapeau administration (module admin).
+     * Un admin peut valider/refuser les demandes de suppression et gérer les comptes.
+     */
+    @Column(nullable = false)
+    private Boolean admin = false;
 
     @Column(nullable = false, updatable = false)
     private Instant dateInscription = Instant.now();
 
-    public Utilisateur() {
+    protected Utilisateur() {
     }
 
-    public Utilisateur(String prenom, String nom, String email, String motDePasse) {
+    protected Utilisateur(String prenom, String nom, String email, String motDePasseHash) {
         this.prenom = prenom;
         this.nom = nom;
         this.email = email;
-        this.motDePasse = motDePasse;
+        this.motDePasse = motDePasseHash;
     }
 
-    public void addPoints(int delta) {
-        if (delta <= 0) {
+    /**
+     * Niveau max accessible par ce sous-type. Implémenté par chaque
+     * sous-classe concrète, pas stocké en base.
+     */
+    @Transient
+    public abstract Niveau getNiveauMax();
+
+    /**
+     * Type discriminant. Les sous-classes le surchargent pour exposer leur valeur.
+     */
+    @Transient
+    public abstract TypeMembre getTypeMembre();
+
+    /** Niveau actuel (derivé des points, clampé au niveauMax). */
+    @Transient
+    public Niveau getNiveau() {
+        float p = points == null ? 0f : points;
+        return Niveau.fromPoints(p).cappedAt(getNiveauMax());
+    }
+
+    /**
+     * Ajoute des points (delta positif). Le niveau est recalculé à la lecture.
+     * À utiliser uniquement via {@code PointsService} pour homogénéité.
+     */
+    public void addPoints(float delta) {
+        if (delta <= 0f) {
             return;
         }
-        this.points = (this.points == null ? 0 : this.points) + delta;
-        this.niveau = 1 + (this.points / 100);
+        this.points = (this.points == null ? 0f : this.points) + delta;
     }
+
+    public void incrementNbConnexions() {
+        this.nbConnexions = (this.nbConnexions == null ? 0 : this.nbConnexions) + 1;
+    }
+
+    // -- getters / setters --
 
     public Long getId() {
         return id;
@@ -98,8 +154,8 @@ public class Utilisateur {
         return motDePasse;
     }
 
-    public void setMotDePasse(String motDePasse) {
-        this.motDePasse = motDePasse;
+    public void setMotDePasse(String motDePasseHash) {
+        this.motDePasse = motDePasseHash;
     }
 
     public String getPseudo() {
@@ -134,12 +190,20 @@ public class Utilisateur {
         this.adressePrivee = adressePrivee;
     }
 
-    public Integer getPoints() {
+    public Float getPoints() {
         return points;
     }
 
-    public Integer getNiveau() {
-        return niveau;
+    public Integer getNbConnexions() {
+        return nbConnexions;
+    }
+
+    public boolean isAdmin() {
+        return Boolean.TRUE.equals(admin);
+    }
+
+    public void setAdmin(Boolean admin) {
+        this.admin = Boolean.TRUE.equals(admin);
     }
 
     public Instant getDateInscription() {

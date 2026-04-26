@@ -1,7 +1,16 @@
 package com.projdevweb.dto;
 
+import com.projdevweb.model.Niveau;
+import com.projdevweb.model.TypeMembre;
 import com.projdevweb.model.Utilisateur;
 
+import java.time.Instant;
+
+/**
+ * Snapshot complet du profil utilisateur exposé au front.
+ * Inclut les champs publics, les champs privés (l'utilisateur consulte son propre profil),
+ * la progression (points/niveau/niveauMax) et la traçabilité (nbConnexions, dateInscription).
+ */
 public record UserProfileDTO(
         Long id,
         String prenom,
@@ -11,22 +20,32 @@ public record UserProfileDTO(
         String bioPublique,
         String telephonePrive,
         String adressePrivee,
-        Integer points,
-        Integer niveau
+        Float points,
+        Niveau niveau,
+        Niveau niveauMax,
+        TypeMembre typeMembre,
+        boolean admin,
+        Integer nbConnexions,
+        Instant dateInscription
 ) {
 
-    public static UserProfileDTO from(Utilisateur utilisateur) {
+    public static UserProfileDTO from(Utilisateur u) {
         return new UserProfileDTO(
-                utilisateur.getId(),
-                utilisateur.getPrenom(),
-                utilisateur.getNom(),
-                utilisateur.getEmail(),
-                utilisateur.getPseudo(),
-                utilisateur.getBioPublique(),
-                utilisateur.getTelephonePrive(),
-                utilisateur.getAdressePrivee(),
-                utilisateur.getPoints(),
-                utilisateur.getNiveau()
+                u.getId(),
+                u.getPrenom(),
+                u.getNom(),
+                u.getEmail(),
+                u.getPseudo(),
+                u.getBioPublique(),
+                u.getTelephonePrive(),
+                u.getAdressePrivee(),
+                u.getPoints(),
+                u.getNiveau(),
+                u.getNiveauMax(),
+                u.getTypeMembre(),
+                u.isAdmin(),
+                u.getNbConnexions(),
+                u.getDateInscription()
         );
     }
 }
