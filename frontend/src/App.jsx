@@ -496,6 +496,8 @@ function pillForObj(obj) {
 /* ─── DEVICE TILE ─────────────────────────────── */
 function DeviceTile({ obj, onClick, actions, compact }) {
   const active = obj.etat === 'ACTIF';
+  const isOuvrant = obj?.branche === 'Ouvrant'
+  const activeVisual = active && !isOuvrant
   const lowBat = obj.batterie != null && obj.batterie < 20;
   const pill = pillForObj(obj);
   const statusText = obj.statusLabel || displayEtat(obj);
@@ -504,25 +506,25 @@ function DeviceTile({ obj, onClick, actions, compact }) {
     <article onClick={onClick} style={{
       cursor: onClick ? 'pointer' : 'default', position:'relative',
       borderRadius: 16, padding: compact ? '16px' : '20px',
-      background: active ? 'linear-gradient(135deg, var(--surface-2), var(--surface))' : 'var(--surface)',
+      background: activeVisual ? 'linear-gradient(135deg, var(--surface-2), var(--surface))' : 'var(--surface)',
       border: '1px solid var(--line)', overflow:'hidden',
       display:'flex', flexDirection:'column', gap: compact ? 12 : 16,
       transition:'transform .18s, border-color .18s',
     }} onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--line-2)'; e.currentTarget.style.transform='translateY(-2px)';}}
        onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--line)'; e.currentTarget.style.transform='translateY(0)';}}>
 
-      {active && <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'radial-gradient(circle, var(--accent-soft), transparent 70%)' }}/>}
+      {activeVisual && <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'radial-gradient(circle, var(--accent-soft), transparent 70%)' }}/>}
 
       <header style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', position:'relative' }}>
         <div style={{
           width: 44, height:44, borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center',
-          background: active ? 'var(--accent-soft)' : 'var(--bg-3)',
-          color: active ? 'var(--accent)' : 'var(--text-3)',
+          background: activeVisual ? 'var(--accent-soft)' : 'var(--bg-3)',
+          color: activeVisual ? 'var(--accent)' : 'var(--text-3)',
         }}>
           <Icon name={ICONS[obj.type] || 'grid'} size={22}/>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:6, position:'relative' }}>
-          {active && <span style={{ position:'absolute', inset:0, borderRadius:'50%', background:pill.dot, opacity:.35, animation:'ping 2s ease-out infinite' }}/>}
+          {activeVisual && <span style={{ position:'absolute', inset:0, borderRadius:'50%', background:pill.dot, opacity:.35, animation:'ping 2s ease-out infinite' }}/>}
           <div style={{
             width:8, height:8, borderRadius:'50%', position:'relative',
             background: pill.dot,
@@ -544,11 +546,11 @@ function DeviceTile({ obj, onClick, actions, compact }) {
       {statusText && (
         <div style={{
           padding:'10px 12px', borderRadius:10, background:'var(--bg-2)',
-          fontSize:13, color: active ? 'var(--text)' : 'var(--text-3)',
+          fontSize:13, color: activeVisual ? 'var(--text)' : 'var(--text-3)',
           display:'flex', justifyContent:'space-between', alignItems:'center',
         }}>
           <span style={{ color:'var(--text-3)', fontSize:11 }}>État</span>
-          <span className="display" style={{ fontSize:14, color: active ? 'var(--accent)' : 'var(--text-2)' }}>{statusText}</span>
+          <span className="display" style={{ fontSize:14, color: activeVisual ? 'var(--accent)' : 'var(--text-2)' }}>{statusText}</span>
         </div>
       )}
 

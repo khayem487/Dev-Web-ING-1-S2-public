@@ -369,9 +369,6 @@ public class GestionController {
                 .map(o -> {
                     Appareil a = (Appareil) o;
                     double conso = a.getConsoEnergie() != null ? a.getConsoEnergie() : 0d;
-                    if (o.getEtat() != Etat.ACTIF) {
-                        conso = 0d;
-                    }
                     return new EnergieDTO.AppareilConsoDTO(
                             o.getId(),
                             o.getNom(),
