@@ -2,6 +2,7 @@ package com.projdevweb.dto;
 
 import com.projdevweb.model.Alarme;
 import com.projdevweb.model.Appareil;
+import com.projdevweb.model.Aspirateur;
 import com.projdevweb.model.BesoinAnimal;
 import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
@@ -85,7 +86,13 @@ public record GestionObjetDetailDTO(
         // DetecteurMouvement
         Integer sensibilite,
         Instant derniereDetectionAt,
-        Integer totalDetections
+        Integer totalDetections,
+
+        // Aspirateur
+        String statutAspirateur,
+        String zoneNettoyage,
+        Integer dureeNettoyageMin,
+        Instant dateDebutCycleAspi
 ) {
 
     public static GestionObjetDetailDTO from(ObjetConnecte o) {
@@ -178,6 +185,17 @@ public record GestionObjetDetailDTO(
             totalDetections = dm.getTotalDetections();
         }
 
+        String statutAspirateur = null;
+        String zoneNettoyage = null;
+        Integer dureeNettoyageMin = null;
+        Instant dateDebutCycleAspi = null;
+        if (o instanceof Aspirateur asp) {
+            statutAspirateur = asp.getStatutAspirateur() != null ? asp.getStatutAspirateur().name() : null;
+            zoneNettoyage = asp.getZoneNettoyage();
+            dureeNettoyageMin = asp.getDureeNettoyageMin();
+            dateDebutCycleAspi = asp.getDateDebutCycle();
+        }
+
         return new GestionObjetDetailDTO(
                 o.getId(),
                 o.getNom(),
@@ -221,7 +239,11 @@ public record GestionObjetDetailDTO(
                 visionNocturne,
                 sensibilite,
                 derniereDetectionAt,
-                totalDetections
+                totalDetections,
+                statutAspirateur,
+                zoneNettoyage,
+                dureeNettoyageMin,
+                dateDebutCycleAspi
         );
     }
 

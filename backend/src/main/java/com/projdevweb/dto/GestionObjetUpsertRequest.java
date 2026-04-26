@@ -65,6 +65,13 @@ public record GestionObjetUpsertRequest(
         // DetecteurMouvement
         Integer sensibilite,
         /** "detect" pour simuler un mouvement détecté. */
-        @Size(max = 16) String motionAction
+        @Size(max = 16) String motionAction,
+
+        // Aspirateur (robot vacuum)
+        @Size(max = 16) String statutAspirateur,
+        @Size(max = 120) String zoneNettoyage,
+        Integer dureeNettoyageMin,
+        /** "start" lance un cycle, "dock" retour base, "done" cycle terminé. */
+        @Size(max = 16) String vacuumAction
 ) {
 }

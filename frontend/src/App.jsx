@@ -235,6 +235,13 @@ const MODES_CAMERA = [
   { code: 'MOTION_ONLY',  label: 'Mouvement seul', icon: '👁' },
 ]
 
+const STATUTS_ASPIRATEUR = [
+  { code: 'EN_VEILLE', label: 'En veille',          icon: '⏸', color: 'var(--text-3)' },
+  { code: 'EN_COURS',  label: 'Nettoyage en cours', icon: '🤖', color: 'var(--green)' },
+  { code: 'TERMINE',   label: 'Cycle terminé',      icon: '✓', color: 'var(--accent)' },
+  { code: 'EN_CHARGE', label: 'En charge',          icon: '🔌', color: 'var(--blue)' },
+]
+
 const PRESETS_VOLET = [
   { value: 0,   label: 'Fermé'    },
   { value: 25,  label: '25%'      },
@@ -308,6 +315,17 @@ function displayEtat(o) {
     if (type === 'Alarme') {
       const s = STATUTS_ALARME.find((x) => x.code === o.alarmeStatut)
       return s ? s.label : (etat === 'ACTIF' ? 'Armée' : 'Désarmée')
+    }
+    if (type === 'Aspirateur') {
+      const s = STATUTS_ASPIRATEUR.find((x) => x.code === o.statutAspirateur)
+      if (!s) return etat === 'ACTIF' ? 'En cours' : 'En veille'
+      // Pour EN_COURS, ajouter le temps écoulé si dispo
+      if (s.code === 'EN_COURS' && o.dateDebutCycleAspi) {
+        const elapsed = Math.floor((Date.now() - new Date(o.dateDebutCycleAspi).getTime()) / 60000)
+        const total = o.dureeNettoyageMin ?? 45
+        return `${s.icon} ${s.label} · ${elapsed}/${total} min`
+      }
+      return `${s.icon} ${s.label}`
     }
     return 'En marche'
   }
@@ -388,6 +406,11 @@ function toUiItem(item) {
     sensibilite: item?.sensibilite == null ? null : Number(item.sensibilite),
     derniereDetectionAt: item?.derniereDetectionAt ?? null,
     totalDetections: item?.totalDetections == null ? null : Number(item.totalDetections),
+    // Aspirateur
+    statutAspirateur: item?.statutAspirateur ?? null,
+    zoneNettoyage: item?.zoneNettoyage ?? null,
+    dureeNettoyageMin: item?.dureeNettoyageMin == null ? null : Number(item.dureeNettoyageMin),
+    dateDebutCycleAspi: item?.dateDebutCycleAspi ?? null,
   }
   // Étiquette d'état type-aware (calculée APRÈS l'enrichissement pour avoir les champs nouveaux dispo)
   enriched.statusLabel = displayEtat(enriched)
@@ -1433,6 +1456,155 @@ function MotionSensorControl({ obj, accent, canManage, onUpdate, onSimulateEvent
 }
 
 /**
+ * Aspirateur robot : statut (EN_VEILLE/EN_COURS/EN_CHARGE/TERMINE), zone à
+ * nettoyer, durée prévue, boutons « Démarrer » / « Retour base ». Avance dans
+ * le cycle (temps écoulé / total) en lecture, affichage type Roomba app.
+ */
+function AspirateurControl({ obj, accent, canManage, onUpdate }) {
+  const [zone, setZone] = useState(obj.zoneNettoyage || obj.pieceNom || '')
+  const [duree, setDuree] = useState(obj.dureeNettoyageMin ?? 45)
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    setZone(obj.zoneNettoyage || obj.pieceNom || '')
+    setDuree(obj.dureeNettoyageMin ?? 45)
+  }, [obj.id, obj.zoneNettoyage, obj.dureeNettoyageMin, obj.pieceNom])
+
+  const dirty = zone !== (obj.zoneNettoyage || obj.pieceNom || '') || duree !== obj.dureeNettoyageMin
+  const meta = STATUTS_ASPIRATEUR.find((s) => s.code === obj.statutAspirateur) || STATUTS_ASPIRATEUR[0]
+  const isRunning = obj.statutAspirateur === 'EN_COURS'
+
+  // Progression (% du cycle écoulé)
+  let progress = 0
+  let elapsedMin = 0
+  if (isRunning && obj.dateDebutCycleAspi && (obj.dureeNettoyageMin ?? 0) > 0) {
+    elapsedMin = Math.floor((Date.now() - new Date(obj.dateDebutCycleAspi).getTime()) / 60000)
+    progress = Math.min(100, Math.round((elapsedMin / obj.dureeNettoyageMin) * 100))
+  }
+
+  const apply = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('save')
+    try { await onUpdate(obj, { zoneNettoyage: zone, dureeNettoyageMin: duree }) }
+    finally { setBusy(null) }
+  }
+
+  const start = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('start')
+    try { await onUpdate(obj, { vacuumAction: 'start', zoneNettoyage: zone, dureeNettoyageMin: duree }) }
+    finally { setBusy(null) }
+  }
+  const dock = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('dock')
+    try { await onUpdate(obj, { vacuumAction: 'dock' }) } finally { setBusy(null) }
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Robot aspirateur</div>
+      <div style={{
+        padding:'18px 20px', borderRadius:14,
+        background: isRunning ? 'rgba(125,216,125,0.06)' : 'var(--bg-2)',
+        border: `1px solid ${isRunning ? 'var(--green)' : 'var(--line)'}`,
+        display:'flex', flexDirection:'column', gap:14,
+      }}>
+        {/* Statut */}
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:36, lineHeight:1 }} aria-hidden="true">{meta.icon}</div>
+          <div className="display" style={{ fontSize:18, marginTop:6, color: meta.color }}>
+            {meta.label}
+          </div>
+          {isRunning && (
+            <div className="mono" style={{ fontSize:11, color:'var(--text-3)', marginTop:6 }}>
+              {elapsedMin} / {obj.dureeNettoyageMin} min · {obj.zoneNettoyage}
+            </div>
+          )}
+        </div>
+
+        {/* Barre de progression cycle */}
+        {isRunning && (
+          <div>
+            <div style={{ height:8, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${progress}%`, background:'var(--green)', borderRadius:99, transition:'width .4s' }}/>
+            </div>
+            <div className="mono num" style={{ fontSize:10, color:'var(--text-4)', marginTop:4, textAlign:'right' }}>
+              {progress}%
+            </div>
+          </div>
+        )}
+
+        {/* Réglages */}
+        <div>
+          <div className="label" style={{ fontSize:9, marginBottom:4 }}>Zone à nettoyer</div>
+          <input
+            type="text"
+            value={zone}
+            onChange={(e) => setZone(e.target.value)}
+            disabled={!canManage || isRunning}
+            placeholder="Ex : Salon, Cuisine"
+            style={{ ...inputStyle, padding:'10px 12px' }}
+          />
+        </div>
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>Durée prévue</span>
+            <span className="mono num" style={{ color: accent }}>{duree} min</span>
+          </div>
+          <input
+            type="range" min="15" max="120" step="5"
+            value={duree}
+            onChange={(e) => setDuree(Number(e.target.value))}
+            disabled={!canManage || isRunning}
+            style={{ width:'100%', accentColor: accent }}
+          />
+        </div>
+
+        {/* Batterie spécifique */}
+        {obj.batterie != null && (
+          <div style={{ fontSize:11, color:'var(--text-3)', display:'flex', justifyContent:'space-between' }}>
+            <span>Batterie robot</span>
+            <span className="mono num" style={{ color: obj.batterie < 20 ? 'var(--red)' : (obj.batterie < 50 ? accent : 'var(--green)') }}>
+              {Math.round(obj.batterie)}%
+            </span>
+          </div>
+        )}
+
+        {/* Actions */}
+        {canManage && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {!isRunning ? (
+              <button
+                type="button"
+                onClick={start}
+                disabled={busy != null || (obj.batterie != null && obj.batterie < 20)}
+                title={obj.batterie != null && obj.batterie < 20 ? 'Batterie trop faible — recharge nécessaire' : 'Démarrer un cycle de nettoyage'}
+                style={{ ...ctaPri, background: accent, padding:'10px 14px', fontSize:12, flex:1 }}
+              >
+                {busy === 'start' ? 'Démarrage…' : '▶ Démarrer cycle'}
+              </button>
+            ) : (
+              <button type="button" onClick={dock} disabled={busy != null} style={{ ...ctaSec, padding:'10px 14px', fontSize:12, flex:1 }}>
+                {busy === 'dock' ? 'Retour base…' : '🔌 Retour base'}
+              </button>
+            )}
+            {dirty && !isRunning && (
+              <button type="button" onClick={apply} disabled={busy != null} style={{ ...ctaSec, padding:'8px 14px', fontSize:12 }}>
+                {busy === 'save' ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize:10, color:'var(--text-4)' }}>
+          Astuce : programmez un cycle quotidien via Routines (« tous les jours à 11h »).
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Pet feeder (Nourriture / Eau) : niveau du réservoir, portion par distribution,
  * actions Distribuer maintenant / Remplir réservoir. La planification réelle
  * est gérée par les scénarios programmés (Petit-déj 8h, Dîner 18h, Eau 7h…).
@@ -1754,6 +1926,11 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
           {/* DetecteurMouvement — sensibilité + simulate + dernière détection */}
           {obj.type === 'DetecteurMouvement' && (
             <MotionSensorControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet} onSimulateEvent={onSimulateEvent}/>
+          )}
+
+          {/* Aspirateur robot — statut + zone + durée + start/dock */}
+          {obj.type === 'Aspirateur' && (
+            <AspirateurControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
           )}
 
           {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}

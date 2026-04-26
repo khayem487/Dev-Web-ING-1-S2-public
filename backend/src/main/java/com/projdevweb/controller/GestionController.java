@@ -751,6 +751,29 @@ public class GestionController {
             return;
         }
 
+        // Aspirateur — statut + zone + durée + commandes start/dock/done
+        if (objet instanceof com.projdevweb.model.Aspirateur asp) {
+            if (request.zoneNettoyage() != null) {
+                asp.setZoneNettoyage(trimToNull(request.zoneNettoyage()));
+            }
+            if (request.dureeNettoyageMin() != null) {
+                asp.setDureeNettoyageMin(request.dureeNettoyageMin());
+            }
+            if (request.statutAspirateur() != null && !request.statutAspirateur().isBlank()) {
+                String s = request.statutAspirateur().trim().toUpperCase(Locale.ROOT);
+                try {
+                    asp.setStatutAspirateur(com.projdevweb.model.Aspirateur.StatutAspirateur.valueOf(s));
+                } catch (IllegalArgumentException ignored) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Statut aspirateur invalide: " + s);
+                }
+            }
+            String action = request.vacuumAction();
+            if ("start".equalsIgnoreCase(action)) asp.demarrerCycle();
+            else if ("dock".equalsIgnoreCase(action)) asp.retourBase();
+            else if ("done".equalsIgnoreCase(action)) asp.terminerCycle();
+            return;
+        }
+
         // Climatiseur — modeClim (FROID/CHAUD/AUTO/VENTILATION) + tempCible (Integer 16-30°C)
         if (objet instanceof com.projdevweb.model.Climatiseur clim) {
             if (request.cycle() != null) clim.setCycle(trimToNull(request.cycle()));
