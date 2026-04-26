@@ -1,5 +1,6 @@
 package com.projdevweb.dto;
 
+import com.projdevweb.model.Alarme;
 import com.projdevweb.model.Appareil;
 import com.projdevweb.model.BesoinAnimal;
 import com.projdevweb.model.Capteur;
@@ -65,7 +66,13 @@ public record GestionObjetDetailDTO(
         String animal,
         Integer portionGrammes,
         Instant derniereDistribution,
-        Instant prochaineDistribution
+        Instant prochaineDistribution,
+
+        // Alarme
+        String alarmeStatut,
+        String alarmeZones,
+        String alarmeCodePin,
+        Instant derniereAlerte
 ) {
 
     public static GestionObjetDetailDTO from(ObjetConnecte o) {
@@ -127,6 +134,17 @@ public record GestionObjetDetailDTO(
             prochaine = ba.getProchaineDistribution();
         }
 
+        String alarmeStatut = null;
+        String alarmeZones = null;
+        String alarmeCodePin = null;
+        Instant derniereAlerte = null;
+        if (o instanceof Alarme al) {
+            alarmeStatut = al.getStatut() != null ? al.getStatut().name() : null;
+            alarmeZones = al.getZones();
+            alarmeCodePin = al.getCodePin();
+            derniereAlerte = al.getDerniereAlerte();
+        }
+
         return new GestionObjetDetailDTO(
                 o.getId(),
                 o.getNom(),
@@ -159,7 +177,11 @@ public record GestionObjetDetailDTO(
                 animal,
                 portionGrammes,
                 derniere,
-                prochaine
+                prochaine,
+                alarmeStatut,
+                alarmeZones,
+                alarmeCodePin,
+                derniereAlerte
         );
     }
 

@@ -532,6 +532,35 @@ public class GestionController {
             return;
         }
 
+        // Alarme — statut (DESARMEE/ARMEE/ALERTE) + zones + tester / reset
+        if (objet instanceof com.projdevweb.model.Alarme al) {
+            if (request.alarmeZones() != null) {
+                al.setZones(trimToNull(request.alarmeZones()));
+            }
+            if (request.alarmeCodePin() != null && !request.alarmeCodePin().isBlank()) {
+                String pin = request.alarmeCodePin().trim();
+                if (pin.matches("\\d{4}")) {
+                    al.setCodePin(pin);
+                } else {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "codePin doit faire 4 chiffres");
+                }
+            }
+            if (request.alarmeStatut() != null && !request.alarmeStatut().isBlank()) {
+                String s = request.alarmeStatut().trim().toUpperCase(Locale.ROOT);
+                try {
+                    al.setStatut(com.projdevweb.model.Alarme.StatutAlarme.valueOf(s));
+                } catch (IllegalArgumentException ignored) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Statut alarme invalide: " + s);
+                }
+            }
+            if ("test".equalsIgnoreCase(request.alarmeAction())) {
+                al.declencherAlerte();
+            } else if ("reset".equalsIgnoreCase(request.alarmeAction())) {
+                al.setStatut(com.projdevweb.model.Alarme.StatutAlarme.DESARMEE);
+            }
+            return;
+        }
+
         // Climatiseur — modeClim (FROID/CHAUD/AUTO/VENTILATION) + tempCible (Integer 16-30°C)
         if (objet instanceof com.projdevweb.model.Climatiseur clim) {
             if (request.cycle() != null) clim.setCycle(trimToNull(request.cycle()));

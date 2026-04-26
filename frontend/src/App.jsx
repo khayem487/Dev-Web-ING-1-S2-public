@@ -208,6 +208,12 @@ const MODES_CLIM = [
   { code: 'VENTILATION',  label: 'Ventilation', icon: '💨' },
 ]
 
+const STATUTS_ALARME = [
+  { code: 'DESARMEE', label: 'Désarmée',         color: 'var(--text-3)', icon: '🟢' },
+  { code: 'ARMEE',    label: 'Armée',            color: 'var(--green)',  icon: '🛡' },
+  { code: 'ALERTE',   label: '⚠ Alerte intrusion', color: 'var(--red)',  icon: '🚨' },
+]
+
 const PRESETS_VOLET = [
   { value: 0,   label: 'Fermé'    },
   { value: 25,  label: '25%'      },
@@ -262,6 +268,10 @@ function displayEtat(o) {
       if (m && target != null) return `${m.icon} ${m.label} · ${target}°C`
       if (m) return `${m.icon} ${m.label}`
       return target != null ? `${target}°C` : 'En marche'
+    }
+    if (type === 'Alarme') {
+      const s = STATUTS_ALARME.find((x) => x.code === o.alarmeStatut)
+      return s ? s.label : (etat === 'ACTIF' ? 'Armée' : 'Désarmée')
     }
     return 'En marche'
   }
@@ -328,6 +338,11 @@ function toUiItem(item) {
     portionGrammes: item?.portionGrammes == null ? null : Number(item.portionGrammes),
     prochaineDistribution: item?.prochaineDistribution ?? null,
     derniereDistribution: item?.derniereDistribution ?? null,
+    // Alarme
+    alarmeStatut: item?.alarmeStatut ?? null,
+    alarmeZones: item?.alarmeZones ?? null,
+    alarmeCodePin: item?.alarmeCodePin ?? null,
+    derniereAlerte: item?.derniereAlerte ?? null,
   }
   // Étiquette d'état type-aware (calculée APRÈS l'enrichissement pour avoir les champs nouveaux dispo)
   enriched.statusLabel = displayEtat(enriched)
@@ -942,6 +957,133 @@ function ClimatiseurControl({ obj, accent, canManage, onUpdate }) {
 }
 
 /**
+ * Système d'alarme : statut DESARMEE/ARMEE/ALERTE, zones surveillées,
+ * code PIN, action « Tester » (force ALERTE 1×) et « Réinitialiser ».
+ */
+function AlarmeControl({ obj, accent, canManage, onUpdate }) {
+  const [statut, setStatut] = useState(obj.alarmeStatut || 'DESARMEE')
+  const [zones, setZones] = useState(obj.alarmeZones || '')
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    setStatut(obj.alarmeStatut || 'DESARMEE')
+    setZones(obj.alarmeZones || '')
+  }, [obj.id, obj.alarmeStatut, obj.alarmeZones])
+
+  const dirty = statut !== obj.alarmeStatut || zones !== (obj.alarmeZones || '')
+  const meta = STATUTS_ALARME.find((s) => s.code === (obj.alarmeStatut || statut)) || STATUTS_ALARME[0]
+  const isAlert = (obj.alarmeStatut || statut) === 'ALERTE'
+
+  const apply = async (extra = {}) => {
+    if (!canManage || !onUpdate) return
+    setBusy('save')
+    try {
+      await onUpdate(obj, { alarmeStatut: statut, alarmeZones: zones, ...extra })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const triggerTest = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('test')
+    try { await onUpdate(obj, { alarmeAction: 'test' }) } finally { setBusy(null) }
+  }
+  const triggerReset = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy('reset')
+    try { await onUpdate(obj, { alarmeAction: 'reset', alarmeStatut: 'DESARMEE' }) } finally { setBusy(null) }
+  }
+
+  const fmtTime = (iso) => {
+    if (!iso) return null
+    const d = new Date(iso)
+    return d.toLocaleString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Sécurité maison</div>
+      <div style={{
+        padding:'18px 20px', borderRadius:14,
+        background: isAlert ? 'rgba(255,80,80,0.08)' : 'var(--bg-2)',
+        border: `1px solid ${isAlert ? 'var(--red)' : 'var(--line)'}`,
+        display:'flex', flexDirection:'column', gap:14,
+        animation: isAlert ? 'rise 0.4s ease' : 'none',
+      }}>
+        {/* Status badge gros plan */}
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:48, lineHeight:1 }} aria-hidden="true">{meta.icon}</div>
+          <div className="display" style={{ fontSize:22, color: meta.color, marginTop:8 }}>
+            {meta.label}
+          </div>
+          {obj.derniereAlerte && (
+            <div className="mono" style={{ fontSize:10, color:'var(--text-4)', marginTop:6 }}>
+              dernière alerte : {fmtTime(obj.derniereAlerte)}
+            </div>
+          )}
+        </div>
+
+        {/* Sélecteur de statut */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:6 }}>
+          {STATUTS_ALARME.map((s) => (
+            <button
+              key={s.code}
+              type="button"
+              onClick={() => canManage && setStatut(s.code)}
+              disabled={!canManage || s.code === 'ALERTE'}
+              aria-pressed={statut === s.code}
+              title={s.code === 'ALERTE' ? 'ALERTE est déclenchée par le bouton Tester ou un capteur' : `Passer en ${s.label}`}
+              style={{
+                padding:'10px 4px', borderRadius:8, fontSize:11, fontWeight: statut === s.code ? 600 : 400,
+                background: statut === s.code ? accent : 'var(--bg-3)',
+                color: statut === s.code ? '#0e1116' : (s.code === 'ALERTE' ? 'var(--text-4)' : 'var(--text-2)'),
+                border:`1px solid ${statut === s.code ? accent : 'var(--line)'}`,
+                cursor: s.code === 'ALERTE' ? 'not-allowed' : (canManage ? 'pointer' : 'not-allowed'),
+              }}
+            >{s.label.replace('⚠ ','')}</button>
+          ))}
+        </div>
+
+        {/* Zones surveillées */}
+        <div>
+          <div className="label" style={{ fontSize:9, marginBottom:4 }}>Zones surveillées</div>
+          <input
+            type="text"
+            value={zones}
+            onChange={(e) => setZones(e.target.value)}
+            disabled={!canManage}
+            placeholder="Ex : Salon, Garage, Hall"
+            style={{ ...inputStyle, padding:'10px 12px' }}
+          />
+        </div>
+
+        {canManage && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {dirty && (
+              <button type="button" onClick={() => apply()} disabled={busy != null} style={{ ...ctaSec, padding:'8px 14px', fontSize:12 }}>
+                {busy === 'save' ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            )}
+            <button type="button" onClick={triggerTest} disabled={busy != null} style={{ ...ctaSec, padding:'8px 14px', fontSize:12, color:'var(--red)', borderColor:'var(--red)' }}>
+              {busy === 'test' ? '⚠ Test…' : '⚠ Tester'}
+            </button>
+            {isAlert && (
+              <button type="button" onClick={triggerReset} disabled={busy != null} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12, flex:1 }}>
+                {busy === 'reset' ? '…' : 'Acquitter & désarmer'}
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize:10, color:'var(--text-4)' }}>
+          Astuce : combinez avec un scénario CONDITIONAL « MOTION_DETECTED + night » pour une vraie surveillance domotique.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Pet feeder (Nourriture / Eau) : niveau du réservoir, portion par distribution,
  * actions Distribuer maintenant / Remplir réservoir. La planification réelle
  * est gérée par les scénarios programmés (Petit-déj 8h, Dîner 18h, Eau 7h…).
@@ -1248,6 +1390,11 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
           {/* Climatiseur — mode + tempCible */}
           {obj.type === 'Climatiseur' && (
             <ClimatiseurControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
+          {/* Alarme — statut + zones + tester */}
+          {obj.type === 'Alarme' && (
+            <AlarmeControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
           )}
 
           {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}

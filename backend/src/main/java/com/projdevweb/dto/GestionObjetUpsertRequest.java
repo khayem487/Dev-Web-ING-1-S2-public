@@ -47,6 +47,13 @@ public record GestionObjetUpsertRequest(
         @Size(max = 60) String animal,
         Integer portionGrammes,
         /** "distribuer" pour faire une distribution, "remplir" pour reset à 100%. */
-        @Size(max = 16) String petAction
+        @Size(max = 16) String petAction,
+
+        // Alarme
+        @Size(max = 16) String alarmeStatut,
+        @Size(max = 200) String alarmeZones,
+        @Size(max = 8) String alarmeCodePin,
+        /** "test" pour déclencher un test d'alerte, "reset" pour revenir DESARMEE. */
+        @Size(max = 16) String alarmeAction
 ) {
 }
