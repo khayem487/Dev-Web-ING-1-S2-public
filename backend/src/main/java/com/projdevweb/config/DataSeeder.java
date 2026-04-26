@@ -136,74 +136,104 @@ public class DataSeeder implements CommandLineRunner {
 
     // ------------------------------------------------------------------- objets
 
-    private void seedObjets() {
-        if (objetConnecteRepository.count() > 0) {
-            return;
-        }
+        private void seedObjets() {
         Map<String, Piece> pieceByName = pieceRepository.findAll().stream()
                 .collect(Collectors.toMap(Piece::getNom, Function.identity()));
 
-        // Ouvrants — position 0=fermé, 100=ouvert
-        Porte porteEntree = new Porte("Porte d'entrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 98f, getPiece(pieceByName, "Salon"), 100);
-        Volet voletSalon = new Volet("Volet baie vitrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 81f, getPiece(pieceByName, "Salon"), 65);
-        Volet voletChambre = new Volet("Volet chambre", "Somfy", Etat.ACTIF, Connectivite.BLUETOOTH, 74f, getPiece(pieceByName, "Chambre parentale"), 30);
-        PorteGarage porteGarage = new PorteGarage("Porte garage", "Nice", Etat.INACTIF, Connectivite.WIFI, 55f, getPiece(pieceByName, "Garage"), 0);
+        List<ObjetConnecte> existing = objetConnecteRepository.findAll();
+        Map<String, Long> existingByType = existing.stream()
+                .collect(Collectors.groupingBy(o -> o.getClass().getSimpleName(), Collectors.counting()));
+        List<ObjetConnecte> toCreate = new ArrayList<>();
 
-        // Capteurs — Thermostat porte une consigne (tempCible) + mode
-        Thermostat thermoSalon = new Thermostat("Thermostat salon", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Zone jour");
-        thermoSalon.setTempCible(21.0f);
-        thermoSalon.setMode(Thermostat.ModeThermostat.AUTO.name());
-        Thermostat thermoChambre = new Thermostat("Thermostat chambre", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"), "Zone nuit");
-        thermoChambre.setTempCible(19.0f);
-        thermoChambre.setMode(Thermostat.ModeThermostat.ECO.name());
-        Camera camEntree = new Camera("Caméra entrée", "Arlo", Etat.ACTIF, Connectivite.WIFI, 89f, getPiece(pieceByName, "Salon"), "Entrée");
-        Camera camGarage = new Camera("Caméra garage", "Arlo", Etat.ACTIF, Connectivite.WIFI, 63f, getPiece(pieceByName, "Garage"), "Garage");
+        if (!existingByType.containsKey("Porte")) {
+            toCreate.add(new Porte("Porte d'entree", "Somfy", Etat.ACTIF, Connectivite.WIFI, 98f, getPiece(pieceByName, "Salon"), 100));
+        }
+        if (!existingByType.containsKey("PorteGarage")) {
+            toCreate.add(new PorteGarage("Porte garage", "Nice", Etat.INACTIF, Connectivite.WIFI, 55f, getPiece(pieceByName, "Garage"), 0));
+        }
+        if (!existingByType.containsKey("Volet")) {
+            toCreate.add(new Volet("Volet baie vitree", "Somfy", Etat.ACTIF, Connectivite.WIFI, 81f, getPiece(pieceByName, "Salon"), 65));
+        }
+        if (!existingByType.containsKey("Fenetre")) {
+            toCreate.add(new Fenetre("Fenetre baie vitree", "Velux", Etat.ACTIF, Connectivite.WIFI, 92f, getPiece(pieceByName, "Salon"), 0));
+        }
 
-        // Appareils — Television sur LIVE_TV, LaveLinge avec programme Eco 40 prêt à lancer
-        Television tv = new Television("TV salon", "Samsung", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Direct");
-        tv.setChaine(7);
-        tv.setVolume(28);
-        tv.setSource(Television.SourceTV.LIVE_TV.name());
+        if (!existingByType.containsKey("Thermostat")) {
+            Thermostat thermoSalon = new Thermostat("Thermostat salon", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Zone jour");
+            thermoSalon.setTempCible(21.0f);
+            thermoSalon.setMode(Thermostat.ModeThermostat.AUTO.name());
+            toCreate.add(thermoSalon);
+        }
+        if (!existingByType.containsKey("Camera")) {
+            toCreate.add(new Camera("Camera entree", "Arlo", Etat.ACTIF, Connectivite.WIFI, 89f, getPiece(pieceByName, "Salon"), "Entree"));
+        }
+        if (!existingByType.containsKey("DetecteurMouvement")) {
+            toCreate.add(new DetecteurMouvement("Detecteur presence salon", "Bosch", Etat.ACTIF, Connectivite.BLUETOOTH, 85f, getPiece(pieceByName, "Salon"), "Securite"));
+        }
+        if (!existingByType.containsKey("Climatiseur")) {
+            Climatiseur climChambre = new Climatiseur("Climatisation chambre", "Daikin", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"));
+            climChambre.setModeClim(Climatiseur.ModeClim.AUTO.name());
+            climChambre.setTempCible(20);
+            toCreate.add(climChambre);
+        }
+        if (!existingByType.containsKey("Alarme")) {
+            Alarme alarme = new Alarme("Systeme d'alarme", "Somfy", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
+            alarme.setStatut(Alarme.StatutAlarme.DESARMEE);
+            toCreate.add(alarme);
+        }
 
-        LaveLinge laveLinge = new LaveLinge("Lave-linge", "LG", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"), "Eco 40");
-        laveLinge.setProgramme(LaveLinge.ProgrammeLavage.ECO_40.name());
-        laveLinge.setTempLavage(LaveLinge.ProgrammeLavage.ECO_40.getTempSuggeree());
-        laveLinge.setVitesseEssorage(LaveLinge.ProgrammeLavage.ECO_40.getEssorageSuggere());
+        if (!existingByType.containsKey("Television")) {
+            Television tv = new Television("TV salon", "Samsung", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Direct");
+            tv.setChaine(7);
+            tv.setVolume(28);
+            tv.setSource(Television.SourceTV.LIVE_TV.name());
+            toCreate.add(tv);
+        }
+        if (!existingByType.containsKey("LaveLinge")) {
+            LaveLinge laveLinge = new LaveLinge("Lave-linge", "LG", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"), "Eco 40");
+            laveLinge.setProgramme(LaveLinge.ProgrammeLavage.ECO_40.name());
+            laveLinge.setTempLavage(LaveLinge.ProgrammeLavage.ECO_40.getTempSuggeree());
+            laveLinge.setVitesseEssorage(LaveLinge.ProgrammeLavage.ECO_40.getEssorageSuggere());
+            toCreate.add(laveLinge);
+        }
+        if (!existingByType.containsKey("SecheLinge")) {
+            toCreate.add(new SecheLinge("Seche-linge", "Bosch", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain")));
+        }
+        if (!existingByType.containsKey("LaveVaisselle")) {
+            toCreate.add(new LaveVaisselle("Lave-vaisselle", "Whirlpool", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine")));
+        }
+        if (!existingByType.containsKey("MachineCafe")) {
+            toCreate.add(new MachineCafe("Machine cafe", "Nespresso", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine")));
+        }
+        if (!existingByType.containsKey("Enceinte")) {
+            toCreate.add(new Enceinte("Enceinte salon", "Sonos", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon")));
+        }
+        if (!existingByType.containsKey("Aspirateur")) {
+            Aspirateur aspirateur = new Aspirateur("Aspirateur robot", "Roomba", Etat.ACTIF, Connectivite.WIFI, 95f, getPiece(pieceByName, "Cuisine"));
+            aspirateur.setStatutAspirateur(Aspirateur.StatutAspirateur.EN_VEILLE);
+            toCreate.add(aspirateur);
+        }
+        if (!existingByType.containsKey("Arrosage")) {
+            toCreate.add(new Arrosage("Arrosage jardin", "Gardena", Etat.INACTIF, Connectivite.WIFI, 88f, getPiece(pieceByName, "Garage")));
+        }
+        if (!existingByType.containsKey("Reveil")) {
+            toCreate.add(new Reveil("Reveil chambre", "Philips", Etat.ACTIF, Connectivite.BLUETOOTH, null, getPiece(pieceByName, "Chambre parentale")));
+        }
 
-        // Besoins animaux — portion par défaut 30g, chat
-        Nourriture distributeur = new Nourriture("Distributeur croquettes", "PetSafe", Etat.ACTIF, Connectivite.WIFI, 79f, getPiece(pieceByName, "Cuisine"), 58f, "Chat");
-        distributeur.setPortionGrammes(30);
-        Eau fontaine = new Eau("Fontaine à eau", "PetKit", Etat.ACTIF, Connectivite.WIFI, 68f, getPiece(pieceByName, "Cuisine"), 46f, "Chat");
-        fontaine.setPortionGrammes(50);
+        if (!existingByType.containsKey("Nourriture")) {
+            Nourriture distributeur = new Nourriture("Distributeur croquettes", "PetSafe", Etat.ACTIF, Connectivite.WIFI, 79f, getPiece(pieceByName, "Cuisine"), 58f, "Chat");
+            distributeur.setPortionGrammes(30);
+            toCreate.add(distributeur);
+        }
+        if (!existingByType.containsKey("Eau")) {
+            Eau fontaine = new Eau("Fontaine a eau", "PetKit", Etat.ACTIF, Connectivite.WIFI, 68f, getPiece(pieceByName, "Cuisine"), 46f, "Chat");
+            fontaine.setPortionGrammes(50);
+            toCreate.add(fontaine);
+        }
 
-        // Additional UML concrete types for demo coverage
-        Fenetre fenetreSalon = new Fenetre("Fenetre baie vitree", "Velux", Etat.ACTIF, Connectivite.WIFI, 92f, getPiece(pieceByName, "Salon"), 0);
-        DetecteurMouvement detecteurSalon = new DetecteurMouvement("Detecteur presence salon", "Bosch", Etat.ACTIF, Connectivite.BLUETOOTH, 85f, getPiece(pieceByName, "Salon"), "Securite");
-        DetecteurMouvement detecteurGarage = new DetecteurMouvement("Detecteur garage", "Bosch", Etat.ACTIF, Connectivite.BLUETOOTH, 70f, getPiece(pieceByName, "Garage"), "Garage");
-        Climatiseur climChambre = new Climatiseur("Climatisation chambre", "Daikin", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"));
-        climChambre.setModeClim(Climatiseur.ModeClim.AUTO.name());
-        climChambre.setTempCible(20);
-        Alarme alarme = new Alarme("Systeme d'alarme", "Somfy", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
-        alarme.setStatut(Alarme.StatutAlarme.DESARMEE);
-        Aspirateur aspirateur = new Aspirateur("Aspirateur robot", "Roomba", Etat.ACTIF, Connectivite.WIFI, 95f, getPiece(pieceByName, "Cuisine"));
-        aspirateur.setStatutAspirateur(Aspirateur.StatutAspirateur.EN_VEILLE);
-        MachineCafe machineCafe = new MachineCafe("Machine cafe", "Nespresso", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine"));
-        Enceinte enceinteSalon = new Enceinte("Enceinte salon", "Sonos", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
-        Arrosage arrosageJardin = new Arrosage("Arrosage jardin", "Gardena", Etat.INACTIF, Connectivite.WIFI, 88f, getPiece(pieceByName, "Garage"));
-        Reveil reveilChambre = new Reveil("Reveil chambre", "Philips", Etat.ACTIF, Connectivite.BLUETOOTH, null, getPiece(pieceByName, "Chambre parentale"));
-        SecheLinge secheLinge = new SecheLinge("Seche-linge", "Bosch", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"));
-        LaveVaisselle laveVaisselle = new LaveVaisselle("Lave-vaisselle", "Whirlpool", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine"));
-
-        objetConnecteRepository.saveAll(List.of(
-                porteEntree, voletSalon, voletChambre, porteGarage,
-                thermoSalon, thermoChambre, camEntree, camGarage,
-                tv, laveLinge,
-                distributeur, fontaine,
-                fenetreSalon, detecteurSalon, detecteurGarage,
-                climChambre, alarme, aspirateur,
-                machineCafe, enceinteSalon, arrosageJardin,
-                reveilChambre, secheLinge, laveVaisselle
-        ));
+        if (!toCreate.isEmpty()) {
+            objetConnecteRepository.saveAll(toCreate);
+        }
     }
 
     // ------------------------------------------------------------- utilisateurs
@@ -428,5 +458,6 @@ public class DataSeeder implements CommandLineRunner {
         return piece;
     }
 }
+
 
 
