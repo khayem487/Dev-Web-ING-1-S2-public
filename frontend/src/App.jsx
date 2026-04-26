@@ -498,6 +498,7 @@ function DeviceTile({ obj, onClick, actions, compact }) {
   const lowBat = obj.batterie != null && obj.batterie < 20;
   const pill = pillForObj(obj);
   const statusText = obj.statusLabel || displayEtat(obj);
+  const showPowerToggle = Boolean(actions) && obj?.branche !== 'Ouvrant';
   return (
     <article onClick={onClick} style={{
       cursor: onClick ? 'pointer' : 'default', position:'relative',
@@ -564,7 +565,11 @@ function DeviceTile({ obj, onClick, actions, compact }) {
         </div>
         {actions ? (
           <div style={{ display:'flex', gap:4 }} onClick={e=>e.stopPropagation()}>
-            <button onClick={()=>actions.toggle(obj)} style={iconBtn}><Icon name="power" size={13}/></button>
+            {showPowerToggle && (
+              <button onClick={()=>actions.toggle(obj)} style={iconBtn} title={active ? 'Éteindre' : 'Allumer'}>
+                <Icon name="power" size={13}/>
+              </button>
+            )}
             <button onClick={()=>actions.edit(obj)} style={iconBtn}><Icon name="edit" size={13}/></button>
             <button onClick={()=>actions.delete(obj.id)} style={{...iconBtn, color:'var(--red)'}}><Icon name="trash" size={13}/></button>
           </div>
