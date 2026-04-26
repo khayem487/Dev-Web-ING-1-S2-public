@@ -440,7 +440,8 @@ public class GestionController {
                 .forEach(n -> dedup.put(n.key(), n));
 
         // 3) Batterie faible (<20%) — signal une fois par objet/heure.
-        Instant batteryBucket = Instant.now().truncatedTo(ChronoUnit.HOURS);
+        Instant now = Instant.now();
+        Instant batteryBucket = now.truncatedTo(ChronoUnit.HOURS);
         objetConnecteRepository.findAll().stream()
                 .filter(o -> o.getBatterie() != null && o.getBatterie() < 20f)
                 .map(o -> new NotificationDTO(
@@ -448,7 +449,7 @@ public class GestionController {
                         "BATTERY_LOW",
                         "critical",
                         "Batterie faible · " + o.getNom() + " (" + Math.round(o.getBatterie()) + "%)",
-                        batteryBucket
+                        now
                 ))
                 .filter(n -> n.timestamp().isAfter(sinceTs))
                 .forEach(n -> dedup.putIfAbsent(n.key(), n));
