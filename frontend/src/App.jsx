@@ -1930,8 +1930,11 @@ function HomePage({ user, items, pieces, t, openDetail, onCreateObjet, canManage
   const [runningScenarioId, setRunningScenarioId] = useState(null)
   const actifs = items.filter(o => o.etat==='ACTIF').length;
   const lowBat = items.filter(o => o.batterie!=null && o.batterie<20);
-  const inactifs = items.filter(o => o.etat === 'INACTIF')
-  const alerts = [...lowBat.map(o => ({ kind:'battery', obj:o })), ...inactifs.slice(0, 5).map(o => ({ kind:'inactive', obj:o }))]
+  const alerts = lowBat.map((o) => ({
+    kind:'battery',
+    severity: o.batterie < 10 ? 'critical' : 'warning',
+    obj:o
+  }))
   const consumption = energy?.consoTotaleKwh ?? (items.filter(o => o.etat==='ACTIF' && o.branche === 'Appareil').length * 1.2);
   const hour = new Date().getHours();
   const greeting = hour<12 ? 'Bonjour' : hour<18 ? 'Bon après-midi' : 'Bonsoir';
@@ -2006,15 +2009,15 @@ function HomePage({ user, items, pieces, t, openDetail, onCreateObjet, canManage
                   >
                     <span style={{
                       width:8, height:8, borderRadius:'50%',
-                      background: a.kind === 'battery' ? 'var(--red)' : 'var(--text-4)',
+                      background: a.severity === 'critical' ? 'var(--red)' : 'var(--accent)',
                     }}/>
                     <span style={{ flex:1, fontSize:13, color:'var(--text)' }}>
-                      <span className="mono" style={{ fontSize:10, marginRight:8, color: a.kind==='battery' ? 'var(--red)' : 'var(--text-3)' }}>
-                        {a.kind === 'battery' ? 'BATTERIE' : 'INACTIF'}
+                      <span className="mono" style={{ fontSize:10, marginRight:8, color: a.severity === 'critical' ? 'var(--red)' : 'var(--accent)' }}>
+                        {a.severity === 'critical' ? 'CRITIQUE' : 'BATTERIE'}
                       </span>
                       {a.obj.nom}
                       <span className="mono" style={{ fontSize:10, color:'var(--text-4)', marginLeft:8 }}>
-                        {a.obj.pieceNom}{a.kind==='battery' && a.obj.batterie != null ? ` · ${a.obj.batterie}%` : ''}
+                        {a.obj.pieceNom}{a.obj.batterie != null ? ` · ${a.obj.batterie}%` : ''}
                       </span>
                     </span>
                     <Icon name="chevR" size={12}/>
