@@ -45,6 +45,8 @@ public abstract class ObjetConnecte {
 
     private Instant derniereInteraction;
 
+    private Instant derniereMaintenance = Instant.now();
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "piece_id", nullable = false)
     private Piece piece;
@@ -120,5 +122,17 @@ public abstract class ObjetConnecte {
 
     public void setPiece(Piece piece) {
         this.piece = piece;
+    }
+
+    public Instant getDerniereMaintenance() {
+        return derniereMaintenance;
+    }
+
+    public void setDerniereMaintenance(Instant derniereMaintenance) {
+        this.derniereMaintenance = derniereMaintenance;
+    }
+
+    public void marquerRepare() {
+        this.derniereMaintenance = Instant.now();
     }
 }

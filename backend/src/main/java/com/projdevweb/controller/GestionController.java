@@ -8,6 +8,7 @@ import com.projdevweb.dto.GestionObjetDetailDTO;
 import com.projdevweb.dto.GestionObjetUpsertRequest;
 import com.projdevweb.dto.GestionStatsDTO;
 import com.projdevweb.dto.HistoriqueActionDTO;
+import com.projdevweb.dto.MaintenanceItemDTO;
 import com.projdevweb.dto.ObjetConnecteDTO;
 import com.projdevweb.dto.ServiceSummaryDTO;
 import com.projdevweb.model.ActionType;
@@ -55,6 +56,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -287,6 +292,35 @@ public class GestionController {
                 .toList();
     }
 
+    @GetMapping("/maintenance")
+    public List<MaintenanceItemDTO> maintenance(HttpSession session) {
+        sessionUtilisateurService.requireAvance(session);
+        return objetConnecteRepository.findAll().stream()
+                .map(this::toMaintenanceItem)
+                .filter(java.util.Objects::nonNull)
+                .sorted(Comparator
+                        .comparingInt((MaintenanceItemDTO i) -> maintenancePriority(i.severite())).reversed()
+                        .thenComparing(MaintenanceItemDTO::nom, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    @PostMapping("/objets/{id}/maintenance/reparer")
+    public GestionObjetDetailDTO reparerObjet(@PathVariable Long id, HttpSession session) {
+        Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
+        ObjetConnecte objet = getObjet(id);
+
+        objet.marquerRepare();
+        if (objet.getBatterie() != null) {
+            objet.setBatterie(100f);
+        }
+        ObjetConnecte saved = objetConnecteRepository.save(objet);
+
+        pointsService.record(utilisateur, ActionType.MAINTENANCE_REPAIRED, saved,
+                "Maintenance marquée pour '" + saved.getNom() + "'");
+
+        return GestionObjetDetailDTO.from(saved);
+    }
+
     // ---------- helpers ----------
 
     private ObjetConnecte buildByType(GestionObjetUpsertRequest request, Piece piece) {
@@ -477,6 +511,53 @@ public class GestionController {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private MaintenanceItemDTO toMaintenanceItem(ObjetConnecte objet) {
+        List<String> raisons = new ArrayList<>();
+        String severite = "LOW";
+
+        Float batterie = objet.getBatterie();
+        if (batterie != null) {
+            if (batterie < 15f) {
+                raisons.add("BATTERIE_CRITIQUE");
+                severite = "CRITICAL";
+            } else if (batterie < 30f) {
+                raisons.add("BATTERIE_FAIBLE");
+                severite = maxSeverity(severite, "HIGH");
+            }
+        }
+
+        Instant derniereMaintenance = objet.getDerniereMaintenance();
+        if (derniereMaintenance == null) {
+            raisons.add("AUCUNE_REVISION");
+            severite = maxSeverity(severite, "HIGH");
+        } else {
+            long days = Duration.between(derniereMaintenance, Instant.now()).toDays();
+            if (days >= 240) {
+                raisons.add("REVISION_EN_RETARD_240J");
+                severite = maxSeverity(severite, "CRITICAL");
+            } else if (days >= 120) {
+                raisons.add("REVISION_PERIODIQUE_120J");
+                severite = maxSeverity(severite, "MEDIUM");
+            }
+        }
+
+        if (raisons.isEmpty()) {
+            return null;
+        }
+        return MaintenanceItemDTO.from(objet, severite, raisons);
+    }
+
+    private static int maintenancePriority(String sev) {
+        if ("CRITICAL".equalsIgnoreCase(sev)) return 3;
+        if ("HIGH".equalsIgnoreCase(sev)) return 2;
+        if ("MEDIUM".equalsIgnoreCase(sev)) return 1;
+        return 0;
+    }
+
+    private static String maxSeverity(String current, String incoming) {
+        return maintenancePriority(incoming) > maintenancePriority(current) ? incoming : current;
     }
 
     private static Integer defaultInteger(Integer value, int fallback) {

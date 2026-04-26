@@ -29,6 +29,7 @@ public record ObjetConnecteDTO(
         Etat etat,
         Connectivite connectivite,
         Float batterie,
+        java.time.Instant derniereMaintenance,
         Long pieceId,
         String pieceNom,
 
@@ -118,6 +119,7 @@ public record ObjetConnecteDTO(
                 o.getEtat(),
                 o.getConnectivite(),
                 o.getBatterie(),
+                o.getDerniereMaintenance(),
                 o.getPiece() != null ? o.getPiece().getId() : null,
                 o.getPiece() != null ? o.getPiece().getNom() : null,
                 position,

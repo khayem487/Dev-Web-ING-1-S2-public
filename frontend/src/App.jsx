@@ -1946,6 +1946,7 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
   const [history, setHistory] = useState([])
   const [stats, setStats] = useState(null)
   const [myDeleteRequests, setMyDeleteRequests] = useState([])
+  const [maintenanceItems, setMaintenanceItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState(initialGestionForm())
@@ -1965,16 +1966,18 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
     setLoading(true)
     setError('')
     try {
-      const [objetsData, historyData, statsData, demandesData] = await Promise.all([
+      const [objetsData, historyData, statsData, demandesData, maintenanceData] = await Promise.all([
         fetchJson('/api/gestion/objets'),
         fetchJson('/api/gestion/historique?limit=40'),
         fetchJson('/api/gestion/stats'),
-        fetchJson('/api/gestion/demandes-suppression/mes-demandes').catch(() => [])
+        fetchJson('/api/gestion/demandes-suppression/mes-demandes').catch(() => []),
+        fetchJson('/api/gestion/maintenance').catch(() => [])
       ])
       setItems(Array.isArray(objetsData) ? objetsData.map(toUiItem) : [])
       setHistory(Array.isArray(historyData) ? historyData.map(historyToUiItem) : [])
       setStats(statsData)
       setMyDeleteRequests(Array.isArray(demandesData) ? demandesData : [])
+      setMaintenanceItems(Array.isArray(maintenanceData) ? maintenanceData : [])
     } catch (e) {
       setError(e.message || 'Erreur chargement gestion')
     } finally {
@@ -2067,6 +2070,16 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
     },
   };
 
+  const repairItem = async (id) => {
+    try {
+      await fetchJson(`/api/gestion/objets/${id}/maintenance/reparer`, { method: 'POST' })
+      flash('Maintenance marquée ✅')
+      await loadGestion()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
   const submit = async (e) => {
     e.preventDefault();
     try {
@@ -2153,6 +2166,31 @@ function GestionPage({ user, pieces, openDetail, t, openFormSignal, onFormHandle
           </div>
         ))}
       </div>
+
+      <article style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, marginBottom:16 }}>
+        <h3 className="display" style={{ fontSize:20, marginBottom:8 }}>
+          Maintenance · <span className="mono" style={{ fontSize:12, color:t.accent }}>{maintenanceItems.length}</span>
+        </h3>
+        {maintenanceItems.length === 0 && <p style={{ color:'var(--text-3)', fontSize:12 }}>Aucun objet critique pour l’instant.</p>}
+        <div style={{ display:'grid', gap:8 }}>
+          {maintenanceItems.slice(0, 8).map((m) => (
+            <div key={m.id} style={{ border:'1px solid var(--line)', borderRadius:10, background:'var(--bg-2)', padding:12, display:'flex', justifyContent:'space-between', alignItems:'center', gap:10 }}>
+              <div>
+                <div style={{ fontSize:13, color:'var(--text)' }}>{m.nom} · {m.type}</div>
+                <div className="mono" style={{ fontSize:10, color:'var(--text-3)', marginTop:4 }}>
+                  {m.pieceNom || 'Maison'} · {m.raisons?.join(' · ') || '-'}
+                </div>
+                <div style={{ fontSize:11, color: m.severite === 'CRITICAL' ? 'var(--red)' : (m.severite === 'HIGH' ? t.accent : 'var(--text-3)') }}>
+                  Sévérité: {m.severite}
+                </div>
+              </div>
+              <button type="button" style={{ ...ctaPri, background:'var(--green)' }} onClick={() => repairItem(m.id)}>
+                Marquer réparé
+              </button>
+            </div>
+          ))}
+        </div>
+      </article>
 
       {showForm && (
         <form onSubmit={submit} className="rise" style={{ borderRadius:18, padding:'24px', marginBottom:24, background:'var(--surface)', border:`1px solid ${t.accent}40` }}>

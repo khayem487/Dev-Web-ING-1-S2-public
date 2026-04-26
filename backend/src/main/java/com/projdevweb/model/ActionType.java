@@ -30,6 +30,7 @@ public enum ActionType {
     UPDATE_OBJET(1.00f),
     TOGGLE_ETAT(0.50f),
     DELETE_OBJET(1.00f),
+    MAINTENANCE_REPAIRED(0.75f),
     SCENARIO_RUN(1.50f);
 
     private final float points;

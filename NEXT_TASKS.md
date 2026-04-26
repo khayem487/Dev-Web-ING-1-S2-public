@@ -91,7 +91,10 @@
 - [ ] **Gap list vs repo de référence `cyZ-tech2/SmartHouse`**
   - [ ] Upload photo profil.
   - [ ] Validation email/token à l'inscription.
-  - [ ] Page maintenance dédiée (objets à réparer + action "marquer réparé").
+  - [x] Page maintenance dédiée (objets à réparer + action "marquer réparé").
+    - endpoint `GET /api/gestion/maintenance`
+    - action `POST /api/gestion/objets/{id}/maintenance/reparer`
+    - panel maintenance visible dans Gestion (sévérité + raisons + bouton)
   - [ ] Exports CSV (objets + consommation).
   - [ ] Profil enrichi (champs perso additionnels) si validé par le groupe.
 

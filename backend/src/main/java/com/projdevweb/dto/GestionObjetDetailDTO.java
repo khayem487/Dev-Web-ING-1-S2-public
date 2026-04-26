@@ -28,6 +28,7 @@ public record GestionObjetDetailDTO(
         Etat etat,
         Connectivite connectivite,
         Float batterie,
+        Instant derniereMaintenance,
         Long pieceId,
         String pieceNom,
 
@@ -132,6 +133,7 @@ public record GestionObjetDetailDTO(
                 o.getEtat(),
                 o.getConnectivite(),
                 o.getBatterie(),
+                o.getDerniereMaintenance(),
                 o.getPiece() != null ? o.getPiece().getId() : null,
                 o.getPiece() != null ? o.getPiece().getNom() : null,
                 position,
