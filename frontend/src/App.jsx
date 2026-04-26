@@ -4551,14 +4551,20 @@ function App() {
         animal: detailDto.animal,
         ...patch,
       }
-      await fetchJson(`/api/gestion/objets/${obj.id}`, {
+      const updatedDto = await fetchJson(`/api/gestion/objets/${obj.id}`, {
         method: 'PUT',
         body: JSON.stringify(payload)
       })
-      await refreshPublic()
-      await refreshEnergy()
+      const updatedUi = toUiItem(updatedDto)
+
+      // Instant local feedback in cards + detail drawer (don't wait for full refetch).
+      setItems((current) => current.map((it) => (it.id === obj.id ? updatedUi : it)))
+      setDetail((current) => current && current.id === obj.id ? updatedUi : current)
+
+      // Keep global data in sync (health/energy/scenarios side effects) in background.
+      refreshPublic().catch(() => {})
+      refreshEnergy().catch(() => {})
       bumpRefresh()
-      setDetail((current) => current && current.id === obj.id ? toUiItem({ ...current, ...patch }) : current)
       showToast('success', `${obj.nom} mis à jour`)
     } catch (e) {
       showToast('error', `Mise à jour impossible : ${e.message}`)
