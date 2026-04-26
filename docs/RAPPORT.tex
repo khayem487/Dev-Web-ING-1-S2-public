@@ -1,0 +1,265 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyvrb}
+
+\geometry{margin=2.3cm}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\setlist[itemize]{noitemsep,topsep=4pt}
+
+\title{\textbf{Rapport -- Projet Maison Intelligente (ING1 Dev Web)}}
+\author{Khayem Ben Ghorbel}
+\date{Année universitaire 2025--2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+Ce projet a pour objectif de concevoir une application web de \textbf{maison connectée} respectant les contraintes du module Dev Web :
+\begin{itemize}
+  \item architecture full-stack avec frameworks,
+  \item persistance en base de données,
+  \item séparation des responsabilités backend/frontend,
+  \item fonctionnalités concrètes de consultation, gestion et administration.
+\end{itemize}
+
+Le système permet de visualiser et piloter des objets connectés (ouvrants, capteurs, appareils, besoins animaux), d'exécuter des scénarios domotiques, de suivre la maintenance et de gérer les utilisateurs côté administration.
+
+\section{Objectifs et périmètre}
+
+\subsection{Objectifs fonctionnels}
+\begin{enumerate}
+  \item \textbf{Information (public)} : consulter pièces et objets, rechercher avec filtres.
+  \item \textbf{Visualisation (membre)} : authentification, profil, consultation objets/services.
+  \item \textbf{Gestion (niveau avancé)} : CRUD objets, statistiques, historique, maintenance, scénarios.
+  \item \textbf{Administration (admin)} : gestion des utilisateurs, rôles admin, demandes de suppression.
+\end{enumerate}
+
+\subsection{Contraintes du module}
+\begin{itemize}
+  \item Utilisation de frameworks backend + frontend.
+  \item Base de données persistante.
+  \item Recherche avec au moins deux filtres.
+  \item Démo exploitable en soutenance.
+\end{itemize}
+
+\section{Stack technique}
+
+\begin{itemize}
+  \item \textbf{Backend} : Java 21, Spring Boot 3.3, Spring Data JPA, Spring Validation.
+  \item \textbf{Frontend} : React 19 + Vite.
+  \item \textbf{Base de données} : H2 (dev rapide), compatibilité MySQL prévue.
+  \item \textbf{Déploiement} : Render (API Docker + frontend statique).
+\end{itemize}
+
+\section{Architecture générale}
+
+L'architecture suit une séparation claire :
+\begin{itemize}
+  \item \texttt{backend/} : modèle métier, persistance, logique applicative, endpoints REST.
+  \item \texttt{frontend/} : interface utilisateur, navigation, appels API, expérience de démo.
+\end{itemize}
+
+Le backend expose des routes REST groupées par domaine :
+\begin{itemize}
+  \item \texttt{/api/info/*}
+  \item \texttt{/api/auth/*}
+  \item \texttt{/api/visualisation/*}
+  \item \texttt{/api/gestion/*}
+  \item \texttt{/api/admin/*}
+\end{itemize}
+
+Le frontend consomme ces routes via \texttt{fetchJson}, avec base configurable (\texttt{VITE\_API\_BASE\_URL}) pour environnement local ou Render.
+
+\section{Modèle métier et données}
+
+Le domaine repose sur un modèle polymorphe :
+\begin{itemize}
+  \item \texttt{Maison} contient des \texttt{Piece}
+  \item \texttt{ObjetConnecte} (abstrait) avec branches : \texttt{Ouvrant}, \texttt{Capteur}, \texttt{Appareil}, \texttt{BesoinAnimal}
+  \item \texttt{Utilisateur} (abstrait) avec \texttt{ParentFamille}, \texttt{Enfant}, \texttt{VoisinVisiteur}
+\end{itemize}
+
+\subsection{Héritage JPA}
+Une stratégie \texttt{SINGLE\_TABLE} est utilisée pour simplifier les lectures et accélérer les vues de démo multi-types.
+
+\subsection{Seed de démonstration}
+Le seeder initialise :
+\begin{itemize}
+  \item une maison + pièces,
+  \item une flotte d'objets couvrant les types UML,
+  \item des utilisateurs de test,
+  \item des scénarios,
+  \item des données réalistes pour maintenance/alertes.
+\end{itemize}
+
+Hotspots de maintenance garantis pour la soutenance :
+\begin{itemize}
+  \item Aspirateur robot (\textbf{CRITICAL}),
+  \item Caméra entrée (\textbf{HIGH}),
+  \item Lave-linge (\textbf{MEDIUM}).
+\end{itemize}
+
+\section{Implémentation backend}
+
+\subsection{API de gestion}
+Le module Gestion fournit :
+\begin{itemize}
+  \item CRUD objets connectés,
+  \item activation/désactivation,
+  \item statistiques,
+  \item historique des actions,
+  \item maintenance et marquage réparé,
+  \item moteur de scénarios manuels/programmés/conditionnels.
+\end{itemize}
+
+\subsection{Contrôles spécialisés par type}
+Des traitements spécifiques sont implémentés selon les classes concrètes (ex. aspirateur, alarme, machine café, besoins animaux), ce qui évite un CRUD générique pauvre.
+
+\subsection{Exemple notable : Machine à café}
+\begin{itemize}
+  \item sélection de boisson,
+  \item consommation eau/café,
+  \item remplissage réservoirs,
+  \item compteur de préparations,
+  \item validation des codes boisson.
+\end{itemize}
+
+\subsection{Sécurité fonctionnelle}
+\begin{itemize}
+  \item séparation des droits utilisateur / avancé / admin,
+  \item protections sur endpoints \texttt{/api/admin/**},
+  \item garde-fous métier (ex. gestion des admins).
+\end{itemize}
+
+\section{Implémentation frontend}
+
+\subsection{UX globale}
+L'application propose :
+\begin{itemize}
+  \item un shell de navigation clair,
+  \item une page d'accueil orientée état global,
+  \item des vues modulaires (recherche, visualisation, gestion, administration),
+  \item des toasts de feedback.
+\end{itemize}
+
+\subsection{Détail objet enrichi}
+Le drawer détail affiche des contrôles selon le type d'objet (et non une UI unique figée).
+
+Exemples :
+\begin{itemize}
+  \item aspirateur : cycle, retour base, statut,
+  \item caméra : mode/résolution/enregistrement,
+  \item besoins animaux : distribution/remplissage,
+  \item machine café : boisson + jauges + actions.
+\end{itemize}
+
+\subsection{Correctif UX important}
+Un correctif clé a été appliqué : mise à jour immédiate de l'UI après action (sans attendre un refetch complet), pour une expérience live plus fluide en soutenance.
+
+\section{Qualité, validation et démonstration}
+
+\subsection{Vérifications techniques}
+\begin{itemize}
+  \item Build backend : \texttt{mvn -DskipTests compile} \textcolor{green!50!black}{\textbf{OK}}
+  \item Build frontend : \texttt{npm.cmd run build} \textcolor{green!50!black}{\textbf{OK}}
+  \item Smoke test démo : \texttt{scripts/demo-smoke.ps1} \textcolor{green!50!black}{\textbf{OK}}
+\end{itemize}
+
+\subsection{Artéfacts de soutenance}
+\begin{itemize}
+  \item \texttt{docs/DEMO\_PROF.md} : script oral 8--10 min
+  \item \texttt{docs/DEMO\_SCRIPT.md} : parcours opérationnel
+  \item \texttt{docs/RAPPORT\_ARTIFACTS.md} : checklist des pièces à joindre
+\end{itemize}
+
+\section{Déploiement Render}
+
+Deux services sont configurés :
+\begin{itemize}
+  \item \textbf{API} : \texttt{dev-web-ing1-api} (Docker, healthcheck \texttt{/api/health})
+  \item \textbf{Frontend} : \texttt{dev-web-ing1-web} (statique Vite)
+\end{itemize}
+
+Points importants :
+\begin{itemize}
+  \item la racine API (\texttt{/}) retourne 404 (normal sur une API-only),
+  \item le healthcheck attendu est \texttt{/api/health},
+  \item le frontend pointe vers l'API via \texttt{VITE\_API\_BASE\_URL}.
+\end{itemize}
+
+\section{Difficultés rencontrées et solutions}
+
+\begin{enumerate}
+  \item \textbf{Migrations/schéma legacy H2} :
+  \begin{itemize}
+    \item Problème : anciennes valeurs incompatibles sur enums.
+    \item Solution : durcissement modèle + ajustements de seed + validations.
+  \end{itemize}
+
+  \item \textbf{Synchronisation état UI / état backend} :
+  \begin{itemize}
+    \item Problème : sensation de non-mise-à-jour instantanée.
+    \item Solution : appliquer la réponse PUT directement dans le state local.
+  \end{itemize}
+
+  \item \textbf{Stabilité démo} :
+  \begin{itemize}
+    \item Problème : démo aléatoire selon données initiales.
+    \item Solution : hotspots maintenance forcés dans le seed pour reproductibilité.
+  \end{itemize}
+\end{enumerate}
+
+\section{Limites actuelles}
+
+\begin{itemize}
+  \item H2 utilisé en mode dev (MySQL prêt mais non imposé en local de démo).
+  \item Couverture de tests automatisés encore partielle (validation surtout manuelle/smoke).
+  \item UI riche mais perfectible sur certains cas limites.
+\end{itemize}
+
+\section{Améliorations futures}
+
+\begin{itemize}
+  \item Passage complet MySQL + migration formalisée.
+  \item Renforcement tests (intégration backend + tests UI E2E).
+  \item Export avancé de rapports d'usage/maintenance.
+  \item Monitoring applicatif et observabilité (logs structurés, métriques).
+\end{itemize}
+
+\section{Conclusion}
+
+Le projet atteint l'objectif d'un produit de maison connectée \textbf{cohérent, démontrable et techniquement structuré}. Les modules Information, Visualisation, Gestion et Administration sont intégrés dans un même système, avec un modèle métier réel et une UX orientée usage concret.
+
+Le résultat est exploitable en soutenance, tout en restant extensible pour une industrialisation progressive.
+
+\section*{Annexe -- Commandes utiles}
+
+\begin{Verbatim}[fontsize=\small]
+# backend
+mvn spring-boot:run
+
+# frontend
+cd frontend
+npm.cmd run dev
+
+# build
+mvn -DskipTests compile
+cd frontend && npm.cmd run build
+
+# smoke demo
+powershell.exe -ExecutionPolicy Bypass -File scripts\demo-smoke.ps1
+\end{Verbatim}
+
+\end{document}
