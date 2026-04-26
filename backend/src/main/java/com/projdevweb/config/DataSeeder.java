@@ -254,6 +254,84 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         backfillConsoEnergieAppareils();
+        backfillMaintenanceDemo();
+    }
+
+    /**
+     * Démo maintenance + alertes :
+     * <ul>
+     *   <li>Tous les objets reçoivent une {@code derniereMaintenance} dans le passé
+     *       (8-90 jours selon le type) → la maintenance ne crie pas pour tout le monde.</li>
+     *   <li>Un Aspirateur robot {@code à réparer} : batterie 12 % + dernière maintenance
+     *       il y a 280 jours → maintenance CRITICAL avec 2 raisons.</li>
+     *   <li>Le Lave-linge a une {@code revision périodique} due (135 jours)
+     *       → maintenance MEDIUM.</li>
+     *   <li>La Caméra garage passe à 18 % de batterie → alerte BATTERIE_FAIBLE +
+     *       maintenance HIGH (faible batterie).</li>
+     *   <li>La Caméra entrée démarre en {@code enregistrement} actif pour la démo
+     *       du flux live.</li>
+     * </ul>
+     * Idempotent : ne touche que les objets qui n'ont aucune {@code derniereMaintenance}
+     * encore enregistrée — donc passé le premier boot, libre à l'utilisateur de cliquer
+     * « Marquer réparé » sans que le seeder ne réécrive ses choix.
+     */
+    private void backfillMaintenanceDemo() {
+        List<ObjetConnecte> all = objetConnecteRepository.findAll();
+        if (all.isEmpty()) return;
+
+        Instant now = Instant.now();
+        List<ObjetConnecte> toUpdate = new ArrayList<>();
+
+        for (ObjetConnecte o : all) {
+            if (o.getDerniereMaintenance() != null) continue;
+            // Par défaut : entretien fait entre 20 et 80 jours, dépendant du nom (déterministe).
+            int seed = Math.abs((o.getNom() == null ? 0 : o.getNom().hashCode())) % 60;
+            Instant derniere = now.minus(20L + seed, ChronoUnit.DAYS);
+            o.setDerniereMaintenance(derniere);
+
+            // Cas spéciaux
+            String nom = o.getNom();
+            if (nom == null) { toUpdate.add(o); continue; }
+
+            if (nom.toLowerCase().contains("aspirateur")) {
+                // Robot vacuum : critique à réparer
+                o.setDerniereMaintenance(now.minus(280, ChronoUnit.DAYS));
+                if (o.getBatterie() != null) o.setBatterie(12f);
+            } else if (nom.toLowerCase().contains("lave-linge") || nom.toLowerCase().contains("lavelinge") || nom.toLowerCase().contains("lave linge")) {
+                // Révision périodique due
+                o.setDerniereMaintenance(now.minus(135, ChronoUnit.DAYS));
+            } else if (nom.toLowerCase().contains("caméra garage") || nom.toLowerCase().contains("camera garage")) {
+                // Batterie basse → alerte
+                o.setBatterie(18f);
+            } else if (nom.toLowerCase().contains("réveil") || nom.toLowerCase().contains("reveil")) {
+                // Réveil sans batterie (secteur) — pas d'alerte batterie
+            }
+
+            toUpdate.add(o);
+        }
+
+        // Caméra entrée : enregistrement actif pour rendre le live feed parlant
+        for (ObjetConnecte o : all) {
+            if (o instanceof Camera cam && o.getNom() != null
+                    && (o.getNom().toLowerCase().contains("entrée") || o.getNom().toLowerCase().contains("entree"))) {
+                if (cam.getEnregistrement() == null || !cam.getEnregistrement()) {
+                    cam.setEnregistrement(Boolean.TRUE);
+                    if (!toUpdate.contains(cam)) toUpdate.add(cam);
+                }
+            }
+            // Détecteur de mouvement : seed un historique (1 détection il y a 2h, 3 cumulées)
+            if (o instanceof DetecteurMouvement dm) {
+                if (dm.getDerniereDetectionAt() == null) {
+                    dm.setDerniereDetectionAt(now.minus(2, ChronoUnit.HOURS));
+                    dm.setTotalDetections(3);
+                    if (!toUpdate.contains(dm)) toUpdate.add(dm);
+                }
+            }
+        }
+
+        if (!toUpdate.isEmpty()) {
+            objetConnecteRepository.saveAll(toUpdate);
+        }
     }
 
     private void backfillConsoEnergieAppareils() {
