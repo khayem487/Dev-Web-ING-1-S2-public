@@ -152,6 +152,7 @@ function toUiUser(user) {
     ...user,
     pseudo: user.pseudo || (user.email ? user.email.split('@')[0] : 'user'),
     photo: initials,
+    photoDataUrl: user.photoDataUrl || null,
     admin: Boolean(user.admin || user.isAdmin),
     typeMembre: normalizeEnumLabel(user.typeMembre) || user.typeMembre,
     niveau: normalizeEnumLabel(user.niveau) || user.niveau,
@@ -1590,6 +1591,35 @@ function SearchPage({ items, pieces, openDetail, t }) {
 }
 const selectStyle = { padding:'8px 12px', background:'var(--bg-2)', color:'var(--text)', border:'1px solid var(--line)', borderRadius:8, fontSize:13, cursor:'pointer' };
 
+function AvatarBadge({ user, size = 48, accent = 'var(--accent)' }) {
+  const initials = user?.photo || 'U'
+  if (user?.photoDataUrl) {
+    return (
+      <img
+        src={user.photoDataUrl}
+        alt={`Avatar ${user?.prenom || ''} ${user?.nom || ''}`.trim() || 'Avatar'}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: Math.round(size * 0.26),
+          objectFit: 'cover',
+          border: `1px solid ${accent}55`,
+          boxShadow: `0 6px 20px ${accent}33`
+        }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      width:size, height:size, borderRadius:Math.round(size * 0.26),
+      background:`linear-gradient(135deg, ${accent}, #ff8a47)`, color:'#0e1116',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      fontFamily:"'Fraunces', serif", fontSize:Math.max(12, Math.round(size * 0.38)), fontWeight:600,
+      boxShadow:`0 8px 32px ${accent}40`,
+    }}>{initials}</div>
+  )
+}
+
 /* ─── LOGIN / VISUALISATION ─────────────── */
 function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSessionRefresh, openDetail, t }) {
   const [filters, setFilters] = useState({ service:'', etat:'', pieceId:'', q:'' });
@@ -1599,7 +1629,10 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
-  const [profileForm, setProfileForm] = useState({ pseudo:'', bioPublique:'', telephonePrive:'', adressePrivee:'' });
+  const [profileForm, setProfileForm] = useState({
+    pseudo:'', bioPublique:'', telephonePrive:'', adressePrivee:'',
+    genre:'', dateNaissance:'', ville:''
+  });
 
   useEffect(() => {
     setProfile(user)
@@ -1607,7 +1640,10 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
       pseudo: user?.pseudo || '',
       bioPublique: user?.bioPublique || '',
       telephonePrive: user?.telephonePrive || '',
-      adressePrivee: user?.adressePrivee || ''
+      adressePrivee: user?.adressePrivee || '',
+      genre: user?.genre || '',
+      dateNaissance: user?.dateNaissance || '',
+      ville: user?.ville || ''
     })
   }, [user])
 
@@ -1640,7 +1676,10 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
           pseudo: profileData?.pseudo || '',
           bioPublique: profileData?.bioPublique || '',
           telephonePrive: profileData?.telephonePrive || '',
-          adressePrivee: profileData?.adressePrivee || ''
+          adressePrivee: profileData?.adressePrivee || '',
+          genre: profileData?.genre || '',
+          dateNaissance: profileData?.dateNaissance || '',
+          ville: profileData?.ville || ''
         })
         setServices(Array.isArray(servicesData) ? servicesData : [])
         setItems(Array.isArray(itemsData) ? itemsData.map(toUiItem) : [])
@@ -1691,6 +1730,32 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
     }
   }
 
+  const uploadProfilePhoto = async (file) => {
+    if (!file) return
+    setSaveMsg('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const response = await fetch(toApiUrl('/api/visualisation/profile/photo'), {
+        method: 'POST',
+        credentials: 'include',
+        body: fd
+      })
+      const text = await response.text()
+      const payload = text ? JSON.parse(text) : null
+      if (!response.ok) {
+        const message = payload?.message || payload?.error || `HTTP ${response.status}`
+        throw new Error(message)
+      }
+      const updated = toUiUser(payload)
+      setProfile(updated)
+      setSaveMsg('Photo profil mise à jour ✅')
+      onSessionRefresh?.()
+    } catch (e) {
+      setSaveMsg(`Erreur: ${e.message}`)
+    }
+  }
+
   return (
     <div className="rise">
       <div style={{ marginBottom:28 }}>
@@ -1705,13 +1770,7 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
       }}>
         <div style={{ position:'absolute', top:-50, right:-50, width:200, height:200, borderRadius:'50%', background:`radial-gradient(circle, ${t.accent}30, transparent 70%)`, pointerEvents:'none' }}/>
         <div style={{ display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:24, alignItems:'center', position:'relative' }}>
-          <div style={{
-            width:72, height:72, borderRadius:18,
-            background:`linear-gradient(135deg, ${t.accent}, #ff8a47)`, color:'#0e1116',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            fontFamily:"'Fraunces', serif", fontSize:30, fontWeight:600,
-            boxShadow:`0 8px 32px ${t.accent}40`,
-          }}>{currentUser.photo}</div>
+          <AvatarBadge user={currentUser} size={72} accent={t.accent} />
 
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
@@ -1793,8 +1852,28 @@ function VisualisationPage({ user, pieces, onLogin, onRegister, onLogout, onSess
       </div>
 
       <form onSubmit={saveProfile} style={{ borderRadius:14, border:'1px solid var(--line)', background:'var(--surface)', padding:16, display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
+        <Field label="Photo de profil">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => uploadProfilePhoto(e.target.files?.[0])}
+            style={inputStyle}
+          />
+        </Field>
         <Field label="Pseudo"><input value={profileForm.pseudo} onChange={(e) => setProfileForm((p) => ({ ...p, pseudo: e.target.value }))} style={inputStyle}/></Field>
         <Field label="Téléphone privé"><input value={profileForm.telephonePrive} onChange={(e) => setProfileForm((p) => ({ ...p, telephonePrive: e.target.value }))} style={inputStyle}/></Field>
+        <Field label="Ville"><input value={profileForm.ville} onChange={(e) => setProfileForm((p) => ({ ...p, ville: e.target.value }))} style={inputStyle}/></Field>
+        <Field label="Genre">
+          <select value={profileForm.genre} onChange={(e) => setProfileForm((p) => ({ ...p, genre: e.target.value }))} style={inputStyle}>
+            <option value="">—</option>
+            <option value="HOMME">Homme</option>
+            <option value="FEMME">Femme</option>
+            <option value="AUTRE">Autre</option>
+          </select>
+        </Field>
+        <Field label="Date de naissance">
+          <input type="date" value={profileForm.dateNaissance || ''} onChange={(e) => setProfileForm((p) => ({ ...p, dateNaissance: e.target.value || null }))} style={inputStyle}/>
+        </Field>
         <div style={{ gridColumn:'span 2' }}><Field label="Bio publique"><input value={profileForm.bioPublique} onChange={(e) => setProfileForm((p) => ({ ...p, bioPublique: e.target.value }))} style={inputStyle}/></Field></div>
         <div style={{ gridColumn:'span 2' }}><Field label="Adresse privée"><input value={profileForm.adressePrivee} onChange={(e) => setProfileForm((p) => ({ ...p, adressePrivee: e.target.value }))} style={inputStyle}/></Field></div>
         <div style={{ gridColumn:'span 2', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -3302,7 +3381,7 @@ function App() {
         <div style={{ marginTop:'auto', padding:'14px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)' }}>
           {user ? (
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <div aria-hidden="true" style={{ width:32, height:32, borderRadius:8, background: t.accent, color:'#0e1116', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Fraunces', serif", fontSize:13, fontWeight:600 }}>{user.photo}</div>
+              <div aria-hidden="true"><AvatarBadge user={user} size={32} accent={t.accent} /></div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
                 <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts</div>

@@ -5,6 +5,7 @@ import com.projdevweb.model.TypeMembre;
 import com.projdevweb.model.Utilisateur;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 /**
  * Snapshot complet du profil utilisateur exposé au front.
@@ -20,6 +21,10 @@ public record UserProfileDTO(
         String bioPublique,
         String telephonePrive,
         String adressePrivee,
+        String genre,
+        LocalDate dateNaissance,
+        String ville,
+        String photoDataUrl,
         Float points,
         Niveau niveau,
         Niveau niveauMax,
@@ -39,6 +44,10 @@ public record UserProfileDTO(
                 u.getBioPublique(),
                 u.getTelephonePrive(),
                 u.getAdressePrivee(),
+                u.getGenre(),
+                u.getDateNaissance(),
+                u.getVille(),
+                u.getPhotoDataUrl(),
                 u.getPoints(),
                 u.getNiveau(),
                 u.getNiveauMax(),

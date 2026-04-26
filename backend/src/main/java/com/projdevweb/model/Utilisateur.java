@@ -9,10 +9,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 /**
  * Utilisateur abstrait — base SINGLE_TABLE pour {@link Enfant},
@@ -57,6 +59,18 @@ public abstract class Utilisateur {
 
     @Column(length = 500)
     private String adressePrivee;
+
+    @Column(length = 32)
+    private String genre;
+
+    private LocalDate dateNaissance;
+
+    @Column(length = 120)
+    private String ville;
+
+    @Lob
+    @Column(columnDefinition = "CLOB")
+    private String photoDataUrl;
 
     /** Points cumulés (Float pour autoriser les +0.25/+0.50). */
     @Column(nullable = false)
@@ -188,6 +202,38 @@ public abstract class Utilisateur {
 
     public void setAdressePrivee(String adressePrivee) {
         this.adressePrivee = adressePrivee;
+    }
+
+    public String getGenre() {
+        return genre;
+    }
+
+    public void setGenre(String genre) {
+        this.genre = genre;
+    }
+
+    public LocalDate getDateNaissance() {
+        return dateNaissance;
+    }
+
+    public void setDateNaissance(LocalDate dateNaissance) {
+        this.dateNaissance = dateNaissance;
+    }
+
+    public String getVille() {
+        return ville;
+    }
+
+    public void setVille(String ville) {
+        this.ville = ville;
+    }
+
+    public String getPhotoDataUrl() {
+        return photoDataUrl;
+    }
+
+    public void setPhotoDataUrl(String photoDataUrl) {
+        this.photoDataUrl = photoDataUrl;
     }
 
     public Float getPoints() {

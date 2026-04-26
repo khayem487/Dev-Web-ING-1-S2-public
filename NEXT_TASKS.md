@@ -89,7 +89,9 @@
   - [ ] Journal admin plus lisible (motif décision + timestamp + auteur).
 
 - [ ] **Gap list vs repo de référence `cyZ-tech2/SmartHouse`**
-  - [ ] Upload photo profil.
+  - [x] Upload photo profil.
+    - `POST /api/visualisation/profile/photo` (multipart, max 2MB)
+    - stockage `photoDataUrl` en base + avatar image rendu front
   - [ ] Validation email/token à l'inscription.
   - [x] Page maintenance dédiée (objets à réparer + action "marquer réparé").
     - endpoint `GET /api/gestion/maintenance`
@@ -99,7 +101,9 @@
     - `GET /api/gestion/exports/objets`
     - `GET /api/gestion/exports/conso`
     - boutons front Gestion pour téléchargement direct
-  - [ ] Profil enrichi (champs perso additionnels) si validé par le groupe.
+  - [x] Profil enrichi (champs perso additionnels).
+    - `genre`, `dateNaissance`, `ville` dans `Utilisateur`
+    - édition dans le formulaire profil Visualisation
 
 - [ ] **P7 Automation réactive + énergie + notifications**
 

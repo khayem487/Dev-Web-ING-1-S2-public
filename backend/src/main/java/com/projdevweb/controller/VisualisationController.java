@@ -12,12 +12,19 @@ import com.projdevweb.service.SessionUtilisateurService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -57,9 +64,40 @@ public class VisualisationController {
         utilisateur.setBioPublique(trimToNull(request.bioPublique()));
         utilisateur.setTelephonePrive(trimToNull(request.telephonePrive()));
         utilisateur.setAdressePrivee(trimToNull(request.adressePrivee()));
+        utilisateur.setGenre(trimToNull(request.genre()));
+        utilisateur.setDateNaissance(request.dateNaissance());
+        utilisateur.setVille(trimToNull(request.ville()));
 
         Utilisateur updated = pointsService.record(utilisateur, ActionType.UPDATE_PROFILE, "Mise à jour profil");
         return UserProfileDTO.from(updated);
+    }
+
+    @PostMapping(value = "/profile/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public UserProfileDTO uploadPhoto(@RequestPart("file") MultipartFile file,
+                                      HttpSession session) {
+        Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fichier image requis");
+        }
+        if (file.getSize() > 2_000_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image trop lourde (max 2MB)");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Seuls les fichiers image sont autorisés");
+        }
+
+        try {
+            String b64 = Base64.getEncoder().encodeToString(file.getBytes());
+            String dataUrl = "data:" + contentType + ";base64," + b64;
+            utilisateur.setPhotoDataUrl(dataUrl);
+            Utilisateur updated = pointsService.record(utilisateur, ActionType.UPDATE_PROFILE, "Photo profil mise à jour");
+            return UserProfileDTO.from(updated);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Upload image impossible");
+        }
     }
 
     @GetMapping("/objets")
