@@ -152,8 +152,19 @@ npm run dev -- --host 0.0.0.0 --port 5173
 - `APP_JPA_DIALECT`
 
 ### Flags applicatifs
-- `APP_AUTH_EMAIL_VERIFICATION_ENABLED` (par défaut `false` en dev)
+- `APP_AUTH_EMAIL_VERIFICATION_ENABLED` (par défaut `true`)
+- `APP_AUTH_EMAIL_VERIFICATION_DEBUG_TOKEN_ENABLED` (par défaut `false`, dev seulement)
 - `APP_SCHEDULER_ENABLED` (par défaut `true`)
+
+### SMTP (vérification email)
+- `APP_MAIL_HOST`
+- `APP_MAIL_PORT` (ex: `587`)
+- `APP_MAIL_USERNAME`
+- `APP_MAIL_PASSWORD`
+- `APP_MAIL_SMTP_AUTH` (par défaut `true`)
+- `APP_MAIL_SMTP_STARTTLS` (par défaut `true`)
+- `APP_MAIL_FROM`
+- `APP_MAIL_APP_NAME`
 
 ---
 

@@ -15,6 +15,7 @@ import com.projdevweb.repository.UtilisateurRepository;
 import com.projdevweb.service.PasswordService;
 import com.projdevweb.service.PointsService;
 import com.projdevweb.service.SessionUtilisateurService;
+import com.projdevweb.service.VerificationEmailService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -41,18 +43,24 @@ public class AuthController {
     private final SessionUtilisateurService sessionUtilisateurService;
     private final PasswordService passwordService;
     private final PointsService pointsService;
+    private final VerificationEmailService verificationEmailService;
     private final boolean emailVerificationEnabled;
+    private final boolean exposeDebugVerificationToken;
 
     public AuthController(UtilisateurRepository utilisateurRepository,
                           SessionUtilisateurService sessionUtilisateurService,
                           PasswordService passwordService,
                           PointsService pointsService,
-                          @Value("${app.auth.email-verification-enabled:false}") boolean emailVerificationEnabled) {
+                          VerificationEmailService verificationEmailService,
+                          @Value("${app.auth.email-verification-enabled:true}") boolean emailVerificationEnabled,
+                          @Value("${app.auth.email-verification-debug-token-enabled:false}") boolean exposeDebugVerificationToken) {
         this.utilisateurRepository = utilisateurRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
         this.passwordService = passwordService;
         this.pointsService = pointsService;
+        this.verificationEmailService = verificationEmailService;
         this.emailVerificationEnabled = emailVerificationEnabled;
+        this.exposeDebugVerificationToken = exposeDebugVerificationToken;
     }
 
     @PostMapping("/register")
@@ -76,7 +84,17 @@ public class AuthController {
             utilisateur.setEmailVerificationToken(generateVerificationToken());
             utilisateur.setEmailVerificationExpireAt(Instant.now().plusSeconds(24 * 3600));
             Utilisateur saved = utilisateurRepository.save(utilisateur);
-            return AuthRegisterResponse.pending(saved.getEmail(), saved.getEmailVerificationToken());
+
+            verificationEmailService.sendVerificationCode(
+                    saved.getEmail(),
+                    saved.getEmailVerificationToken(),
+                    saved.getEmailVerificationExpireAt()
+            );
+
+            return AuthRegisterResponse.pending(
+                    saved.getEmail(),
+                    exposeDebugVerificationToken ? saved.getEmailVerificationToken() : null
+            );
         }
 
         utilisateur.setEmailVerifie(true);
@@ -151,15 +169,23 @@ public class AuthController {
         String token = generateVerificationToken();
         utilisateur.setEmailVerificationToken(token);
         utilisateur.setEmailVerificationExpireAt(Instant.now().plusSeconds(24 * 3600));
-        utilisateurRepository.save(utilisateur);
+        Utilisateur saved = utilisateurRepository.save(utilisateur);
 
-        return Map.of(
-                "ok", true,
-                "alreadyVerified", false,
-                "email", utilisateur.getEmail(),
-                "debugToken", token,
-                "expiresAt", utilisateur.getEmailVerificationExpireAt()
+        verificationEmailService.sendVerificationCode(
+                saved.getEmail(),
+                token,
+                saved.getEmailVerificationExpireAt()
         );
+
+        Map<String, Object> out = new HashMap<>();
+        out.put("ok", true);
+        out.put("alreadyVerified", false);
+        out.put("email", utilisateur.getEmail());
+        if (exposeDebugVerificationToken) {
+            out.put("debugToken", token);
+        }
+        out.put("expiresAt", utilisateur.getEmailVerificationExpireAt());
+        return out;
     }
 
     @PostMapping("/logout")

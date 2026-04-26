@@ -61,7 +61,7 @@ const PAGES = [
   { id:'home', label:'Accueil', icon:'home' },
   { id:'recherche', label:'Recherche', icon:'search' },
   { id:'visualisation', label:'Mes objets', icon:'grid' },
-  { id:'gestion', label:'Gestion', icon:'settings' },
+  { id:'gestion', label:'Gestion', icon:'settings', manageOnly:true },
   { id:'admin', label:'Administration', icon:'lock', adminOnly:true },
 ];
 
@@ -2843,6 +2843,16 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
         </div>
       </div>
 
+      {currentUser.niveau !== 'Avancé' && (
+        <div style={{ marginBottom:20, borderRadius:12, padding:'12px 14px', border:'1px solid var(--line)', background:'var(--surface)' }}>
+          <div className="label" style={{ marginBottom:6 }}>Ce que tu peux faire maintenant</div>
+          <div style={{ fontSize:12, color:'var(--text-3)', lineHeight:1.45 }}>
+            Profil + consultation des objets/services ✅ · Gestion verrouillée jusqu'au niveau Avancé.
+            Continue à explorer les objets pour gagner des points et débloquer la gestion.
+          </div>
+        </div>
+      )}
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:24 }}>
         {['Acces','Surveillance','Confort','Animal'].map(s => {
           const apiService = services.find((x) => x.code === s)
@@ -2934,10 +2944,8 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
       const result = await onRegister(registerForm)
       if (result?.verificationRequired) {
         setTab('verify')
-        setVerifyForm({ email: result.email || registerForm.email, token: result.debugToken || '' })
-        setVerifyMsg(result.debugToken
-          ? `Compte créé. Code de vérification (dev): ${result.debugToken}`
-          : 'Compte créé. Entre le code reçu par email.')
+        setVerifyForm({ email: result.email || registerForm.email, token: '' })
+        setVerifyMsg('Compte créé. Un code de vérification vient d\'être envoyé sur ton email.')
       }
     } catch (e) {
       setError(e.message || 'Inscription impossible')
@@ -2964,10 +2972,8 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
     setLoading(true)
     setError('')
     try {
-      const data = await onResendVerification(verifyForm.email)
-      setVerifyMsg(data?.debugToken
-        ? `Nouveau code (dev): ${data.debugToken}`
-        : 'Code renvoyé (si le compte existe et n\'est pas vérifié).')
+      await onResendVerification(verifyForm.email)
+      setVerifyMsg('Code renvoyé par email.')
     } catch (e) {
       setError(e.message || 'Renvoi impossible')
     } finally {
@@ -3051,11 +3057,15 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
               <Field label="Mot de passe"><input type="password" value={registerForm.motDePasse} onChange={(e)=>setRegisterForm((f)=>({ ...f, motDePasse: e.target.value }))} style={inputStyle}/></Field>
               <Field label="Type de membre">
                 <select value={registerForm.typeMembre} onChange={(e)=>setRegisterForm((f)=>({ ...f, typeMembre: e.target.value }))} style={inputStyle}>
-                  <option value="PARENT_FAMILLE">ParentFamille — Avancé</option>
-                  <option value="ENFANT">Enfant — Intermédiaire</option>
-                  <option value="VOISIN_VISITEUR">VoisinVisiteur — Débutant</option>
+                  <option value="PARENT_FAMILLE">ParentFamille — plafond Avancé</option>
+                  <option value="ENFANT">Enfant — plafond Intermédiaire</option>
+                  <option value="VOISIN_VISITEUR">VoisinVisiteur — plafond Débutant</option>
                 </select>
               </Field>
+            </div>
+            <div style={{ marginTop:10, fontSize:12, color:'var(--text-3)' }}>
+              Après inscription tu démarres Débutant : +0.25 pt / connexion et +0.50 pt / consultation d'objet.
+              Le module Gestion se débloque au niveau Avancé (10 points).
             </div>
             {(error || verifyMsg) && <div style={{ color:error ? 'var(--red)' : 'var(--text-3)', fontSize:12, marginTop:10 }}>{error || verifyMsg}</div>}
             <button disabled={loading} style={{ marginTop:20, width:'100%', padding:'14px', background: t.accent, color:'#0e1116', borderRadius:10, fontSize:14, fontWeight:600 }}>{loading ? 'Création...' : 'Créer mon compte'}</button>
@@ -3111,17 +3121,17 @@ function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal,
   const [form, setForm] = useState(initialGestionForm())
 
   useEffect(() => {
-    if (openFormSignal && user?.niveauMax === 'Avancé') {
+    if (openFormSignal && user?.niveau === 'Avancé') {
       setEditing(null)
       setForm(initialGestionForm())
       setShowForm(true)
       window.scrollTo({ top: 240, behavior: 'smooth' })
       onFormHandled?.()
     }
-  }, [openFormSignal, user?.niveauMax, onFormHandled])
+  }, [openFormSignal, user?.niveau, onFormHandled])
 
   const loadGestion = async () => {
-    if (!user || user.niveauMax !== 'Avancé') return
+    if (!user || user.niveau !== 'Avancé') return
     setLoading(true)
     setError('')
     try {
@@ -3155,22 +3165,23 @@ function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal,
           <Icon name="lock" size={28}/>
         </div>
         <h2 className="display" style={{ fontSize:28, marginBottom:10 }}>Connexion requise</h2>
-        <p style={{ fontSize:14, color:'var(--text-2)' }}>Le module Gestion est réservé aux comptes authentifiés (niveauMax = Avancé). Connectez-vous via l'onglet « Mes objets ».</p>
+        <p style={{ fontSize:14, color:'var(--text-2)' }}>Le module Gestion est réservé aux comptes authentifiés (niveau actuel = Avancé). Connectez-vous via l'onglet « Mes objets ».</p>
       </div>
     );
   }
-  if (user.niveauMax !== 'Avancé') {
+  if (user.niveau !== 'Avancé') {
     return (
       <div className="rise" style={{ padding:'80px 0', textAlign:'center', maxWidth:520, margin:'0 auto' }}>
         <div style={{ width:64, height:64, borderRadius:18, background:'var(--red-soft)', color:'var(--red)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }}>
           <Icon name="lock" size={28}/>
         </div>
         <div className="label" style={{ color:'var(--red)', marginBottom:6 }}>Accès refusé</div>
-        <h2 className="display" style={{ fontSize:28, marginBottom:10 }}>Plafond <span className="display-i" style={{color:'var(--red)'}}>{user.niveauMax}</span> atteint</h2>
-        <p style={{ fontSize:14, color:'var(--text-2)', marginBottom:18 }}>Le module Gestion exige niveauMax = Avancé. Votre type de membre <strong>{user.typeMembre}</strong> est plafonné à {user.niveauMax}.</p>
+        <h2 className="display" style={{ fontSize:28, marginBottom:10 }}>Niveau actuel <span className="display-i" style={{color:'var(--red)'}}>{user.niveau}</span></h2>
+        <p style={{ fontSize:14, color:'var(--text-2)', marginBottom:18 }}>Le module Gestion exige le niveau <strong>Avancé</strong>. Ton plafond de type membre est {user.niveauMax}.</p>
         <div style={{ padding:'16px', borderRadius:12, background:'var(--surface)', border:'1px solid var(--line)', textAlign:'left', fontSize:12, color:'var(--text-3)' }}>
           <div className="label" style={{ marginBottom:8 }}>Hiérarchie des plafonds</div>
           VoisinVisiteur → Débutant<br/>Enfant → Intermédiaire<br/>ParentFamille → Avancé
+          <br/><br/>Gains : +0.25 pt / connexion et +0.50 pt / consultation.
         </div>
       </div>
     );
@@ -4350,10 +4361,14 @@ function App() {
   const [energy, setEnergy] = useState(null)
   const notificationCursorRef = useRef(new Date(Date.now() - 30 * 60 * 1000).toISOString())
   const seenNotificationsRef = useRef(new Set())
-  const canManage = user?.niveauMax === 'Avancé'
+  const canManage = user?.niveau === 'Avancé'
   const visiblePages = useMemo(
-    () => PAGES.filter((p) => !p.adminOnly || user?.admin),
-    [user?.admin]
+    () => PAGES.filter((p) => {
+      if (p.adminOnly && !user?.admin) return false
+      if (p.manageOnly && !canManage) return false
+      return true
+    }),
+    [user?.admin, canManage]
   )
 
   useEffect(() => {
@@ -4633,6 +4648,12 @@ function App() {
   }, [page, user?.admin])
 
   useEffect(() => {
+    if (page === 'gestion' && !canManage) {
+      setPage(user ? 'visualisation' : 'home')
+    }
+  }, [page, canManage, user])
+
+  useEffect(() => {
     seenNotificationsRef.current = new Set()
     notificationCursorRef.current = new Date(Date.now() - 30 * 60 * 1000).toISOString()
   }, [user?.id])
@@ -4747,7 +4768,7 @@ function App() {
         <nav aria-label="Modules" style={{ display:'flex', flexDirection:'column', gap:2 }}>
           {visiblePages.map(p => {
             const active = page === p.id;
-            const locked = p.id === 'gestion' && user && user.niveauMax !== 'Avancé';
+            const locked = p.id === 'gestion' && user && !canManage;
             return (
               <button
                 key={p.id}
