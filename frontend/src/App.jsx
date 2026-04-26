@@ -74,6 +74,7 @@ const GESTION_TYPE_OPTIONS = [
   'MachineCafe', 'Enceinte', 'Aspirateur', 'Arrosage', 'Reveil', 'Climatiseur', 'Alarme',
   'Nourriture', 'Eau'
 ]
+const OUVRANT_TYPES = new Set(['Porte', 'PorteGarage', 'Volet', 'Fenetre'])
 const DEMO_CREDENTIALS = [
   { email: 'parent@demo.local', motDePasse: 'demo1234', label: 'ParentFamille', niveauMax: 'Avancé' },
   { email: 'enfant@demo.local', motDePasse: 'demo1234', label: 'Enfant', niveauMax: 'Intermédiaire' },
@@ -3078,7 +3079,9 @@ function GestionPage({ user, pieces, openDetail, t, refreshTick, openFormSignal,
                 {safePieces.map(p => <option key={p.id} value={String(p.id)}>{p.nom}</option>)}
               </select>
             </Field>
-            <Field label="État"><select style={inputStyle} value={form.etat} onChange={(e)=>setForm((f)=>({ ...f, etat: e.target.value }))}><option>ACTIF</option><option>INACTIF</option></select></Field>
+            {!OUVRANT_TYPES.has(form.type) && (
+              <Field label="État"><select style={inputStyle} value={form.etat} onChange={(e)=>setForm((f)=>({ ...f, etat: e.target.value }))}><option>ACTIF</option><option>INACTIF</option></select></Field>
+            )}
             <Field label="Connectivité"><select style={inputStyle} value={form.connectivite} onChange={(e)=>setForm((f)=>({ ...f, connectivite: e.target.value }))}><option>WIFI</option><option>BLUETOOTH</option></select></Field>
             <Field label="Batterie %"><input type="number" min="0" max="100" style={inputStyle} value={form.batterie} onChange={(e)=>setForm((f)=>({ ...f, batterie: e.target.value }))}/></Field>
             {(form.type === 'Porte' || form.type === 'Volet' || form.type === 'Fenetre') && <Field label="Position"><input type="number" style={inputStyle} value={form.position} onChange={(e)=>setForm((f)=>({ ...f, position: e.target.value }))}/></Field>}
@@ -3599,8 +3602,8 @@ function RoutineEditor({ scenario, objets, accent, onSubmit, onCancel }) {
                     value={a.targetEtat}
                     onChange={(e) => updateAction(i, { targetEtat: e.target.value })}
                   >
-                    <option value="ACTIF">→ Actif</option>
-                    <option value="INACTIF">→ Inactif</option>
+                    <option value="ACTIF">{isOuvrant ? '→ Ouvrir' : '→ Actif'}</option>
+                    <option value="INACTIF">{isOuvrant ? '→ Fermer' : '→ Inactif'}</option>
                   </select>
                   {isOuvrant && (
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
@@ -3676,15 +3679,21 @@ function formFromDetail(detail) {
 }
 
 function payloadFromForm(form) {
+  const isOuvrantType = OUVRANT_TYPES.has(form.type)
+  const position = toNullableInteger(form.position)
+  const derivedEtat = isOuvrantType
+    ? ((position ?? 0) > 0 ? 'ACTIF' : 'INACTIF')
+    : form.etat
+
   return {
     type: form.type,
     nom: form.nom,
     marque: trimToNull(form.marque),
     pieceId: toNullableInteger(form.pieceId),
-    etat: form.etat,
+    etat: derivedEtat,
     connectivite: form.connectivite,
     batterie: toNullableFloat(form.batterie),
-    position: toNullableInteger(form.position),
+    position,
     zone: trimToNull(form.zone),
     cycle: trimToNull(form.cycle),
     consoEnergie: toNullableFloat(form.consoEnergie),

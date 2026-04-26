@@ -1,6 +1,7 @@
 package com.projdevweb.config;
 
 import com.projdevweb.model.ActionType;
+import com.projdevweb.model.Appareil;
 import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
 import com.projdevweb.model.Chambre;
@@ -175,6 +176,7 @@ public class DataSeeder implements CommandLineRunner {
             Climatiseur climChambre = new Climatiseur("Climatisation chambre", "Daikin", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"));
             climChambre.setModeClim(Climatiseur.ModeClim.AUTO.name());
             climChambre.setTempCible(20);
+            climChambre.setConsoEnergie(2.4f);
             toCreate.add(climChambre);
         }
         if (!existingByType.containsKey("Alarme")) {
@@ -188,6 +190,7 @@ public class DataSeeder implements CommandLineRunner {
             tv.setChaine(7);
             tv.setVolume(28);
             tv.setSource(Television.SourceTV.LIVE_TV.name());
+            tv.setConsoEnergie(0.18f);
             toCreate.add(tv);
         }
         if (!existingByType.containsKey("LaveLinge")) {
@@ -195,30 +198,44 @@ public class DataSeeder implements CommandLineRunner {
             laveLinge.setProgramme(LaveLinge.ProgrammeLavage.ECO_40.name());
             laveLinge.setTempLavage(LaveLinge.ProgrammeLavage.ECO_40.getTempSuggeree());
             laveLinge.setVitesseEssorage(LaveLinge.ProgrammeLavage.ECO_40.getEssorageSuggere());
+            laveLinge.setConsoEnergie(1.1f);
             toCreate.add(laveLinge);
         }
         if (!existingByType.containsKey("SecheLinge")) {
-            toCreate.add(new SecheLinge("Seche-linge", "Bosch", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain")));
+            SecheLinge secheLinge = new SecheLinge("Seche-linge", "Bosch", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"));
+            secheLinge.setConsoEnergie(1.6f);
+            toCreate.add(secheLinge);
         }
         if (!existingByType.containsKey("LaveVaisselle")) {
-            toCreate.add(new LaveVaisselle("Lave-vaisselle", "Whirlpool", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine")));
+            LaveVaisselle laveVaisselle = new LaveVaisselle("Lave-vaisselle", "Whirlpool", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine"));
+            laveVaisselle.setConsoEnergie(1.2f);
+            toCreate.add(laveVaisselle);
         }
         if (!existingByType.containsKey("MachineCafe")) {
-            toCreate.add(new MachineCafe("Machine cafe", "Nespresso", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine")));
+            MachineCafe machineCafe = new MachineCafe("Machine cafe", "Nespresso", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Cuisine"));
+            machineCafe.setConsoEnergie(0.08f);
+            toCreate.add(machineCafe);
         }
         if (!existingByType.containsKey("Enceinte")) {
-            toCreate.add(new Enceinte("Enceinte salon", "Sonos", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon")));
+            Enceinte enceinte = new Enceinte("Enceinte salon", "Sonos", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"));
+            enceinte.setConsoEnergie(0.05f);
+            toCreate.add(enceinte);
         }
         if (!existingByType.containsKey("Aspirateur")) {
             Aspirateur aspirateur = new Aspirateur("Aspirateur robot", "Roomba", Etat.ACTIF, Connectivite.WIFI, 95f, getPiece(pieceByName, "Cuisine"));
             aspirateur.setStatutAspirateur(Aspirateur.StatutAspirateur.EN_VEILLE);
+            aspirateur.setConsoEnergie(0.45f);
             toCreate.add(aspirateur);
         }
         if (!existingByType.containsKey("Arrosage")) {
-            toCreate.add(new Arrosage("Arrosage jardin", "Gardena", Etat.INACTIF, Connectivite.WIFI, 88f, getPiece(pieceByName, "Garage")));
+            Arrosage arrosage = new Arrosage("Arrosage jardin", "Gardena", Etat.INACTIF, Connectivite.WIFI, 88f, getPiece(pieceByName, "Garage"));
+            arrosage.setConsoEnergie(0.30f);
+            toCreate.add(arrosage);
         }
         if (!existingByType.containsKey("Reveil")) {
-            toCreate.add(new Reveil("Reveil chambre", "Philips", Etat.ACTIF, Connectivite.BLUETOOTH, null, getPiece(pieceByName, "Chambre parentale")));
+            Reveil reveil = new Reveil("Reveil chambre", "Philips", Etat.ACTIF, Connectivite.BLUETOOTH, null, getPiece(pieceByName, "Chambre parentale"));
+            reveil.setConsoEnergie(0.02f);
+            toCreate.add(reveil);
         }
 
         if (!existingByType.containsKey("Nourriture")) {
@@ -235,6 +252,40 @@ public class DataSeeder implements CommandLineRunner {
         if (!toCreate.isEmpty()) {
             objetConnecteRepository.saveAll(toCreate);
         }
+
+        backfillConsoEnergieAppareils();
+    }
+
+    private void backfillConsoEnergieAppareils() {
+        List<ObjetConnecte> toUpdate = new ArrayList<>();
+        for (ObjetConnecte objet : objetConnecteRepository.findAll()) {
+            if (!(objet instanceof Appareil appareil)) continue;
+            if (appareil.getConsoEnergie() != null) continue;
+
+            Float defaultConso = defaultConsoFor(appareil);
+            if (defaultConso == null) continue;
+
+            appareil.setConsoEnergie(defaultConso);
+            toUpdate.add(objet);
+        }
+
+        if (!toUpdate.isEmpty()) {
+            objetConnecteRepository.saveAll(toUpdate);
+        }
+    }
+
+    private static Float defaultConsoFor(Appareil appareil) {
+        if (appareil instanceof Climatiseur) return 2.4f;
+        if (appareil instanceof LaveLinge) return 1.1f;
+        if (appareil instanceof SecheLinge) return 1.6f;
+        if (appareil instanceof LaveVaisselle) return 1.2f;
+        if (appareil instanceof Television) return 0.18f;
+        if (appareil instanceof Aspirateur) return 0.45f;
+        if (appareil instanceof Arrosage) return 0.30f;
+        if (appareil instanceof Enceinte) return 0.05f;
+        if (appareil instanceof MachineCafe) return 0.08f;
+        if (appareil instanceof Reveil) return 0.02f;
+        return null;
     }
 
     // ------------------------------------------------------------- utilisateurs

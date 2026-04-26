@@ -189,6 +189,9 @@ public class GestionController {
         Utilisateur utilisateur = sessionUtilisateurService.requireAvance(session);
         ObjetConnecte objet = getObjet(id);
 
+        if (objet instanceof Ouvrant ouvrant) {
+            ouvrant.setPosition(request.actif() ? 100 : 0);
+        }
         objet.setEtat(request.actif() ? Etat.ACTIF : Etat.INACTIF);
         ObjetConnecte saved = objetConnecteRepository.save(objet);
 
@@ -550,10 +553,22 @@ public class GestionController {
         String marque = trimToNull(request.marque());
 
         return switch (type) {
-            case "porte" -> new Porte(nom, marque, etat, connectivite, batterie, piece, defaultInteger(request.position(), 0));
-            case "portegarage" -> new PorteGarage(nom, marque, etat, connectivite, batterie, piece, defaultInteger(request.position(), 0));
-            case "volet" -> new Volet(nom, marque, etat, connectivite, batterie, piece, defaultInteger(request.position(), 0));
-            case "fenetre" -> new Fenetre(nom, marque, etat, connectivite, batterie, piece, defaultInteger(request.position(), 0));
+            case "porte" -> {
+                int position = defaultInteger(request.position(), 0);
+                yield new Porte(nom, marque, etatFromOuvrantPosition(position), connectivite, batterie, piece, position);
+            }
+            case "portegarage" -> {
+                int position = defaultInteger(request.position(), 0);
+                yield new PorteGarage(nom, marque, etatFromOuvrantPosition(position), connectivite, batterie, piece, position);
+            }
+            case "volet" -> {
+                int position = defaultInteger(request.position(), 0);
+                yield new Volet(nom, marque, etatFromOuvrantPosition(position), connectivite, batterie, piece, position);
+            }
+            case "fenetre" -> {
+                int position = defaultInteger(request.position(), 0);
+                yield new Fenetre(nom, marque, etatFromOuvrantPosition(position), connectivite, batterie, piece, position);
+            }
             case "thermostat" -> new Thermostat(nom, marque, etat, connectivite, batterie, piece, defaultString(request.zone(), "Zone"));
             case "camera" -> new Camera(nom, marque, etat, connectivite, batterie, piece, defaultString(request.zone(), "Zone"));
             case "detecteurmouvement" -> new DetecteurMouvement(nom, marque, etat, connectivite, batterie, piece, defaultString(request.zone(), "Zone"));
@@ -581,7 +596,7 @@ public class GestionController {
         if (request.marque() != null) {
             objet.setMarque(trimToNull(request.marque()));
         }
-        if (request.etat() != null && !request.etat().isBlank()) {
+        if (!(objet instanceof Ouvrant) && request.etat() != null && !request.etat().isBlank()) {
             objet.setEtat(parseEtat(request.etat(), objet.getEtat()));
         }
         if (request.connectivite() != null && !request.connectivite().isBlank()) {
@@ -601,6 +616,8 @@ public class GestionController {
             if (request.position() != null) {
                 ouvrant.setPosition(Math.max(0, Math.min(100, request.position())));
             }
+            int position = openingPosition(ouvrant);
+            objet.setEtat(etatFromOuvrantPosition(position));
             return;
         }
 
@@ -906,6 +923,16 @@ public class GestionController {
         } catch (Exception ex) {
             return fallback;
         }
+    }
+
+    private static int openingPosition(Ouvrant ouvrant) {
+        Integer position = ouvrant.getPosition();
+        if (position == null) return 0;
+        return Math.max(0, Math.min(100, position));
+    }
+
+    private static Etat etatFromOuvrantPosition(int position) {
+        return position > 0 ? Etat.ACTIF : Etat.INACTIF;
     }
 
     private static Etat parseEtat(String value, Etat fallback) {

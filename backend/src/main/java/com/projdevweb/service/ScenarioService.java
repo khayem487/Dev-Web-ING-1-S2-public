@@ -100,9 +100,15 @@ public class ScenarioService {
                 objet.setEtat(action.getTargetEtat());
             }
 
-            if (objet instanceof Ouvrant ouvrant && action.getTargetPosition() != null) {
-                int p = Math.max(0, Math.min(100, action.getTargetPosition()));
-                ouvrant.setPosition(p);
+            if (objet instanceof Ouvrant ouvrant) {
+                if (action.getTargetPosition() != null) {
+                    int p = Math.max(0, Math.min(100, action.getTargetPosition()));
+                    ouvrant.setPosition(p);
+                    objet.setEtat(p > 0 ? Etat.ACTIF : Etat.INACTIF);
+                } else if (action.getTargetEtat() != null) {
+                    // Compat legacy : targetEtat seul pour ouvrant => map explicite position.
+                    ouvrant.setPosition(action.getTargetEtat() == Etat.ACTIF ? 100 : 0);
+                }
             }
 
             // Pet feeder programmé : ACTIF + scénario = on distribue effectivement une portion
