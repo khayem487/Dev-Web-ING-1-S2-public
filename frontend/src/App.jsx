@@ -242,6 +242,15 @@ const STATUTS_ASPIRATEUR = [
   { code: 'EN_CHARGE', label: 'En charge',          icon: '🔌', color: 'var(--blue)' },
 ]
 
+const BOISSONS_CAFE = [
+  { code: 'ESPRESSO',  label: 'Espresso',         icon: '☕', eau: 8,  cafe: 12 },
+  { code: 'LONG',      label: 'Café long',        icon: '☕', eau: 15, cafe: 12 },
+  { code: 'AMERICANO', label: 'Americano',        icon: '☕', eau: 22, cafe: 12 },
+  { code: 'CAPPUCCINO',label: 'Cappuccino',       icon: '☕', eau: 18, cafe: 14 },
+  { code: 'LATTE',     label: 'Latte',            icon: '🥛', eau: 25, cafe: 14 },
+  { code: 'EAU_CHAUDE',label: 'Eau chaude',       icon: '💧', eau: 12, cafe: 0  },
+]
+
 const PRESETS_VOLET = [
   { value: 0,   label: 'Fermé'    },
   { value: 25,  label: '25%'      },
@@ -327,6 +336,13 @@ function displayEtat(o) {
       }
       return `${s.icon} ${s.label}`
     }
+    if (type === 'MachineCafe') {
+      if (o.niveauEau != null && o.niveauEau < 10) return '⚠ Réservoir d\'eau vide'
+      if (o.niveauCafe != null && o.niveauCafe < 10) return '⚠ Bac à café vide'
+      const b = BOISSONS_CAFE.find((x) => x.code === o.derniereBoisson)
+      if (b) return `${b.icon} Prête · ${b.label}`
+      return etat === 'ACTIF' ? '☕ Prête' : 'En veille'
+    }
     return 'En marche'
   }
 
@@ -411,6 +427,12 @@ function toUiItem(item) {
     zoneNettoyage: item?.zoneNettoyage ?? null,
     dureeNettoyageMin: item?.dureeNettoyageMin == null ? null : Number(item.dureeNettoyageMin),
     dateDebutCycleAspi: item?.dateDebutCycleAspi ?? null,
+    // MachineCafe
+    niveauEau: item?.niveauEau == null ? null : Number(item.niveauEau),
+    niveauCafe: item?.niveauCafe == null ? null : Number(item.niveauCafe),
+    derniereBoisson: item?.derniereBoisson ?? null,
+    dernierePreparation: item?.dernierePreparation ?? null,
+    totalPreparations: item?.totalPreparations == null ? null : Number(item.totalPreparations),
   }
   // Étiquette d'état type-aware (calculée APRÈS l'enrichissement pour avoir les champs nouveaux dispo)
   enriched.statusLabel = displayEtat(enriched)
@@ -1605,6 +1627,129 @@ function AspirateurControl({ obj, accent, canManage, onUpdate }) {
 }
 
 /**
+ * Machine à café : sélection de boisson (Espresso, Long, Americano, Cappuccino,
+ * Latte, Eau chaude), jauges de réservoir d'eau et de bac café, bouton « Préparer »
+ * qui consomme les ressources et incrémente le compteur de préparations.
+ */
+function MachineCafeControl({ obj, accent, canManage, onUpdate }) {
+  const [boisson, setBoisson] = useState(obj.derniereBoisson || 'ESPRESSO')
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    setBoisson(obj.derniereBoisson || 'ESPRESSO')
+  }, [obj.id, obj.derniereBoisson])
+
+  const eau = Number(obj.niveauEau ?? 0)
+  const cafe = Number(obj.niveauCafe ?? 0)
+  const meta = BOISSONS_CAFE.find((b) => b.code === boisson) || BOISSONS_CAFE[0]
+  const eauOK = eau >= meta.eau
+  const cafeOK = meta.cafe === 0 || cafe >= meta.cafe
+
+  const fmtTime = (iso) => {
+    if (!iso) return '—'
+    const ms = Date.now() - new Date(iso).getTime()
+    if (ms < 60_000) return 'à l\'instant'
+    if (ms < 3600_000) return `il y a ${Math.floor(ms/60000)} min`
+    if (ms < 86400_000) return `il y a ${Math.floor(ms/3600000)} h`
+    return new Date(iso).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' })
+  }
+
+  const colorEau = eau < 10 ? 'var(--red)' : (eau < 30 ? accent : 'var(--blue)')
+  const colorCafe = cafe < 10 ? 'var(--red)' : (cafe < 30 ? accent : 'var(--green)')
+
+  const trigger = async (action) => {
+    if (!canManage || !onUpdate) return
+    setBusy(action)
+    try {
+      if (action === 'preparer') await onUpdate(obj, { coffeeAction: 'preparer', boisson })
+      else if (action === 'remplir-eau') await onUpdate(obj, { coffeeAction: 'remplir-eau' })
+      else if (action === 'remplir-cafe') await onUpdate(obj, { coffeeAction: 'remplir-cafe' })
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Préparer une boisson</div>
+      <div style={{ padding:'18px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        {/* Compteur + dernière préparation */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', fontSize:11, color:'var(--text-3)' }}>
+          <span>{obj.totalPreparations ?? 0} café{(obj.totalPreparations ?? 0) > 1 ? 's' : ''} préparé{(obj.totalPreparations ?? 0) > 1 ? 's' : ''}</span>
+          <span className="mono">Dernier : {fmtTime(obj.dernierePreparation)}</span>
+        </div>
+
+        {/* Sélecteur de boisson */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:6 }}>
+          {BOISSONS_CAFE.map((b) => (
+            <button
+              key={b.code}
+              type="button"
+              onClick={() => canManage && setBoisson(b.code)}
+              disabled={!canManage}
+              aria-pressed={boisson === b.code}
+              style={{
+                padding:'12px 6px', borderRadius:10, fontSize:11, fontWeight: boisson === b.code ? 600 : 400,
+                background: boisson === b.code ? accent : 'var(--bg-3)',
+                color: boisson === b.code ? '#0e1116' : 'var(--text-2)',
+                border:`1px solid ${boisson === b.code ? accent : 'var(--line)'}`,
+                display:'flex', flexDirection:'column', alignItems:'center', gap:4,
+              }}
+            >
+              <span style={{ fontSize:18 }} aria-hidden="true">{b.icon}</span>
+              <span>{b.label}</span>
+              <span className="mono" style={{ fontSize:9, opacity:0.7 }}>~{b.eau}% eau{b.cafe > 0 ? ` · ${b.cafe}% café` : ''}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Jauges */}
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>💧 Réservoir d'eau</span>
+            <span className="mono num" style={{ color: colorEau }}>{Math.round(eau)}%</span>
+          </div>
+          <div style={{ height:8, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+            <div style={{ height:'100%', width:`${eau}%`, background: colorEau, borderRadius:99, transition:'width .3s' }}/>
+          </div>
+        </div>
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>☕ Bac à café</span>
+            <span className="mono num" style={{ color: colorCafe }}>{Math.round(cafe)}%</span>
+          </div>
+          <div style={{ height:8, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+            <div style={{ height:'100%', width:`${cafe}%`, background: colorCafe, borderRadius:99, transition:'width .3s' }}/>
+          </div>
+        </div>
+
+        {/* Actions */}
+        {canManage && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <button
+              type="button"
+              onClick={() => trigger('preparer')}
+              disabled={busy != null || !eauOK || !cafeOK}
+              title={!eauOK ? 'Pas assez d\'eau' : (!cafeOK ? 'Pas assez de café' : `Préparer ${meta.label}`)}
+              style={{ ...ctaPri, background: accent, padding:'10px 14px', fontSize:12, flex:1 }}
+            >
+              {busy === 'preparer' ? 'Préparation…' : `${meta.icon} Préparer ${meta.label}`}
+            </button>
+            <button type="button" onClick={() => trigger('remplir-eau')} disabled={busy != null || eau >= 100} style={{ ...ctaSec, padding:'8px 10px', fontSize:11 }} title="Remplir le réservoir d'eau à 100%">
+              {busy === 'remplir-eau' ? '…' : '💧 +'}
+            </button>
+            <button type="button" onClick={() => trigger('remplir-cafe')} disabled={busy != null || cafe >= 100} style={{ ...ctaSec, padding:'8px 10px', fontSize:11 }} title="Remplir le bac à café à 100%">
+              {busy === 'remplir-cafe' ? '…' : '☕ +'}
+            </button>
+          </div>
+        )}
+        <div style={{ fontSize:10, color:'var(--text-4)' }}>
+          Astuce : programmez « Café du matin » à 7h via Routines pour démarrer la journée avec un Espresso prêt.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
  * Pet feeder (Nourriture / Eau) : niveau du réservoir, portion par distribution,
  * actions Distribuer maintenant / Remplir réservoir. La planification réelle
  * est gérée par les scénarios programmés (Petit-déj 8h, Dîner 18h, Eau 7h…).
@@ -1931,6 +2076,11 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
           {/* Aspirateur robot — statut + zone + durée + start/dock */}
           {obj.type === 'Aspirateur' && (
             <AspirateurControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
+          {/* MachineCafe — boisson + jauges + préparer */}
+          {obj.type === 'MachineCafe' && (
+            <MachineCafeControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
           )}
 
           {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}

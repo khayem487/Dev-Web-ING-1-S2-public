@@ -8,6 +8,7 @@ import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
 import com.projdevweb.model.Climatiseur;
 import com.projdevweb.model.DetecteurMouvement;
+import com.projdevweb.model.MachineCafe;
 import com.projdevweb.model.Connectivite;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.LaveLinge;
@@ -92,7 +93,14 @@ public record GestionObjetDetailDTO(
         String statutAspirateur,
         String zoneNettoyage,
         Integer dureeNettoyageMin,
-        Instant dateDebutCycleAspi
+        Instant dateDebutCycleAspi,
+
+        // MachineCafe
+        Float niveauEau,
+        Float niveauCafe,
+        String derniereBoisson,
+        Instant dernierePreparation,
+        Integer totalPreparations
 ) {
 
     public static GestionObjetDetailDTO from(ObjetConnecte o) {
@@ -196,6 +204,19 @@ public record GestionObjetDetailDTO(
             dateDebutCycleAspi = asp.getDateDebutCycle();
         }
 
+        Float niveauEau = null;
+        Float niveauCafe = null;
+        String derniereBoisson = null;
+        Instant dernierePreparation = null;
+        Integer totalPreparations = null;
+        if (o instanceof MachineCafe mc) {
+            niveauEau = mc.getNiveauEau();
+            niveauCafe = mc.getNiveauCafe();
+            derniereBoisson = mc.getDerniereBoisson();
+            dernierePreparation = mc.getDernierePreparation();
+            totalPreparations = mc.getTotalPreparations();
+        }
+
         return new GestionObjetDetailDTO(
                 o.getId(),
                 o.getNom(),
@@ -243,7 +264,12 @@ public record GestionObjetDetailDTO(
                 statutAspirateur,
                 zoneNettoyage,
                 dureeNettoyageMin,
-                dateDebutCycleAspi
+                dateDebutCycleAspi,
+                niveauEau,
+                niveauCafe,
+                derniereBoisson,
+                dernierePreparation,
+                totalPreparations
         );
     }
 

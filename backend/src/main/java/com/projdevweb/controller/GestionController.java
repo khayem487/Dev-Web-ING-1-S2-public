@@ -751,6 +751,29 @@ public class GestionController {
             return;
         }
 
+        // MachineCafe — niveaux + boisson + preparer / remplir
+        if (objet instanceof com.projdevweb.model.MachineCafe mc) {
+            if (request.niveauEau() != null) mc.setNiveauEau(request.niveauEau());
+            if (request.niveauCafe() != null) mc.setNiveauCafe(request.niveauCafe());
+            if (request.boisson() != null && !request.boisson().isBlank()) {
+                mc.setDerniereBoisson(request.boisson().trim().toUpperCase(Locale.ROOT));
+            }
+            String act = request.coffeeAction();
+            if ("preparer".equalsIgnoreCase(act)) {
+                String code = request.boisson() != null ? request.boisson() : mc.getDerniereBoisson();
+                boolean ok = mc.preparer(code);
+                if (!ok) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Préparation impossible : réservoir d'eau ou de café trop bas");
+                }
+            } else if ("remplir-eau".equalsIgnoreCase(act)) {
+                mc.remplirEau();
+            } else if ("remplir-cafe".equalsIgnoreCase(act)) {
+                mc.remplirCafe();
+            }
+            return;
+        }
+
         // Aspirateur — statut + zone + durée + commandes start/dock/done
         if (objet instanceof com.projdevweb.model.Aspirateur asp) {
             if (request.zoneNettoyage() != null) {

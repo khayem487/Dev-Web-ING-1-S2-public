@@ -72,6 +72,13 @@ public record GestionObjetUpsertRequest(
         @Size(max = 120) String zoneNettoyage,
         Integer dureeNettoyageMin,
         /** "start" lance un cycle, "dock" retour base, "done" cycle terminé. */
-        @Size(max = 16) String vacuumAction
+        @Size(max = 16) String vacuumAction,
+
+        // MachineCafe
+        Float niveauEau,
+        Float niveauCafe,
+        @Size(max = 16) String boisson,
+        /** "preparer" pour servir la boisson, "remplir-eau" / "remplir-cafe" pour recharger. */
+        @Size(max = 24) String coffeeAction
 ) {
 }
