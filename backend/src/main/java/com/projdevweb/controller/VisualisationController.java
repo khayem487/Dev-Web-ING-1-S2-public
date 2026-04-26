@@ -4,9 +4,10 @@ import com.projdevweb.dto.ObjetConnecteDTO;
 import com.projdevweb.dto.ServiceSummaryDTO;
 import com.projdevweb.dto.UserProfileDTO;
 import com.projdevweb.dto.UserProfileUpdateRequest;
+import com.projdevweb.model.ActionType;
 import com.projdevweb.model.Utilisateur;
 import com.projdevweb.repository.ObjetConnecteRepository;
-import com.projdevweb.repository.UtilisateurRepository;
+import com.projdevweb.service.PointsService;
 import com.projdevweb.service.SessionUtilisateurService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -27,23 +28,24 @@ import java.util.stream.Collectors;
 public class VisualisationController {
 
     private final ObjetConnecteRepository objetConnecteRepository;
-    private final UtilisateurRepository utilisateurRepository;
     private final SessionUtilisateurService sessionUtilisateurService;
+    private final PointsService pointsService;
 
     public VisualisationController(ObjetConnecteRepository objetConnecteRepository,
-                                   UtilisateurRepository utilisateurRepository,
-                                   SessionUtilisateurService sessionUtilisateurService) {
+                                   SessionUtilisateurService sessionUtilisateurService,
+                                   PointsService pointsService) {
         this.objetConnecteRepository = objetConnecteRepository;
-        this.utilisateurRepository = utilisateurRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
+        this.pointsService = pointsService;
     }
 
     @GetMapping("/profile")
     public UserProfileDTO profile(HttpSession session) {
         Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
-        utilisateur.addPoints(1); // consultation profil
-        utilisateurRepository.save(utilisateur);
-        return UserProfileDTO.from(utilisateur);
+        // Silent : on récompense la consultation mais on ne pollue pas l'historique
+        // (sinon une ligne "Consultation profil" par refresh de page → journal illisible).
+        Utilisateur updated = pointsService.awardPoints(utilisateur, ActionType.CONSULT_PROFILE);
+        return UserProfileDTO.from(updated);
     }
 
     @PutMapping("/profile")
@@ -56,10 +58,8 @@ public class VisualisationController {
         utilisateur.setTelephonePrive(trimToNull(request.telephonePrive()));
         utilisateur.setAdressePrivee(trimToNull(request.adressePrivee()));
 
-        utilisateur.addPoints(5); // action de personnalisation
-        utilisateurRepository.save(utilisateur);
-
-        return UserProfileDTO.from(utilisateur);
+        Utilisateur updated = pointsService.record(utilisateur, ActionType.UPDATE_PROFILE, "Mise à jour profil");
+        return UserProfileDTO.from(updated);
     }
 
     @GetMapping("/objets")
@@ -80,9 +80,13 @@ public class VisualisationController {
 
         List<ObjetConnecteDTO> result = objetConnecteRepository.findAll().stream()
                 .map(ObjetConnecteDTO::from)
-                .filter(o -> typeNorm == null || containsExactIgnoreCase(o.type(), typeNorm) || containsExactIgnoreCase(o.branche(), typeNorm))
-                .filter(o -> serviceNorm == null || containsExactIgnoreCase(o.service(), serviceNorm))
-                .filter(o -> etatNorm == null || containsExactIgnoreCase(o.etat() != null ? o.etat().name() : null, etatNorm))
+                .filter(o -> typeNorm == null
+                        || containsExactIgnoreCase(o.type(), typeNorm)
+                        || containsExactIgnoreCase(o.branche(), typeNorm))
+                .filter(o -> serviceNorm == null
+                        || containsExactIgnoreCase(o.service(), serviceNorm))
+                .filter(o -> etatNorm == null
+                        || containsExactIgnoreCase(o.etat() != null ? o.etat().name() : null, etatNorm))
                 .filter(o -> pieceId == null || pieceId.equals(o.pieceId()))
                 .filter(o -> qNorm == null
                         || contains(o.nom(), qNorm)
@@ -93,9 +97,9 @@ public class VisualisationController {
                         || contains(o.pieceNom(), qNorm))
                 .toList();
 
-        utilisateur.addPoints(2); // recherche/consultation objets
-        utilisateurRepository.save(utilisateur);
-
+        // Silent : la recherche se déclenche à chaque saisie / changement de filtre,
+        // on ne veut pas une ligne historique par interaction.
+        pointsService.awardPoints(utilisateur, ActionType.SEARCH_OBJETS);
         return result;
     }
 

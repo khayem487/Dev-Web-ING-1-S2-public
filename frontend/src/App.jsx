@@ -164,6 +164,96 @@ function taxonomyFor(type) {
   return TYPE_TAXONOMY[type] || { branche:'ObjetConnecte', service:'General', icon:'grid', methodes:['activer()','desactiver()'] }
 }
 
+// Catalogues produit miroirs des enums backend (LaveLinge.ProgrammeLavage, etc.)
+const PROGRAMMES_LAVAGE = [
+  { code: 'ECO_40',     label: 'Eco 40°C',           dureeMin: 120, temp: 40, essorage: 1000 },
+  { code: 'COTON_60',   label: 'Coton 60°C',         dureeMin: 150, temp: 60, essorage: 1400 },
+  { code: 'EXPRESS_30', label: 'Express 30°C',       dureeMin: 30,  temp: 30, essorage: 1200 },
+  { code: 'SYNTH_30',   label: 'Synthétique 30°C',   dureeMin: 90,  temp: 30, essorage: 800 },
+  { code: 'DELICAT',    label: 'Délicat 20°C',       dureeMin: 60,  temp: 20, essorage: 600 },
+  { code: 'RINCAGE',    label: 'Rinçage',            dureeMin: 25,  temp: 30, essorage: 1000 },
+  { code: 'ESSORAGE',   label: 'Essorage seul',      dureeMin: 15,  temp: 0,  essorage: 1400 },
+]
+
+const SOURCES_TV = [
+  { code: 'LIVE_TV', label: 'Direct'    },
+  { code: 'NETFLIX', label: 'Netflix'   },
+  { code: 'YOUTUBE', label: 'YouTube'   },
+  { code: 'DISNEY',  label: 'Disney+'   },
+  { code: 'SPOTIFY', label: 'Spotify'   },
+  { code: 'HDMI1',   label: 'HDMI 1'    },
+  { code: 'HDMI2',   label: 'HDMI 2'    },
+]
+
+const MODES_THERMOSTAT = [
+  { code: 'AUTO',    label: 'Auto'     },
+  { code: 'CHAUFFE', label: 'Chauffage'},
+  { code: 'ECO',     label: 'Éco'      },
+  { code: 'OFF',     label: 'Arrêt'    },
+]
+
+const PRESETS_VOLET = [
+  { value: 0,   label: 'Fermé'    },
+  { value: 25,  label: '25%'      },
+  { value: 50,  label: '50%'      },
+  { value: 75,  label: '75%'      },
+  { value: 100, label: 'Ouvert'   },
+]
+
+/**
+ * Étiquette d'état type-aware. Sépare la sémantique métier ("Ouvert 50%",
+ * "Cycle Eco 40°C · 38 min", "OK 58%") du brut ACTIF/INACTIF qui n'a aucun
+ * sens pour un Volet ou un distributeur.
+ */
+function displayEtat(o) {
+  if (!o) return ''
+  const etat = o.etat
+  const branche = o.branche
+  const type = o.type
+
+  if (branche === 'Ouvrant') {
+    const pos = Number(o.position ?? 0)
+    if (pos <= 5) return 'Fermé'
+    if (pos >= 95) return 'Ouvert'
+    return `Ouvert ${pos}%`
+  }
+
+  if (branche === 'Capteur') {
+    if (type === 'Thermostat' && o.tempCible != null) {
+      const mode = (MODES_THERMOSTAT.find((m) => m.code === o.mode)?.label) || ''
+      return etat === 'ACTIF' ? `Consigne ${o.tempCible}°C${mode ? ' · ' + mode : ''}` : 'Désactivé'
+    }
+    return etat === 'ACTIF' ? 'Surveille' : 'Désactivé'
+  }
+
+  if (branche === 'Appareil') {
+    if (etat !== 'ACTIF') return 'À l\'arrêt'
+    if (type === 'LaveLinge') {
+      const prog = PROGRAMMES_LAVAGE.find((p) => p.code === o.programme)
+      const label = prog ? prog.label : (o.cycle || 'Cycle')
+      return o.dureeRestante != null && o.dureeRestante > 0
+        ? `${label} · ${o.dureeRestante} min`
+        : `${label} · prêt`
+    }
+    if (type === 'Television') {
+      const src = SOURCES_TV.find((s) => s.code === o.source)
+      if (src && src.code !== 'LIVE_TV') return `${src.label} · vol ${o.volume ?? 0}`
+      return `Chaîne ${o.chaine ?? 1} · vol ${o.volume ?? 0}`
+    }
+    return 'En marche'
+  }
+
+  if (branche === 'BesoinAnimal') {
+    const niv = Number(o.niveauReservoir ?? o.niveau ?? 0)
+    if (etat !== 'ACTIF') return `Hors service · ${Math.round(niv)}%`
+    if (niv < 20) return `⚠ Vide · ${Math.round(niv)}%`
+    if (niv < 50) return `À recharger · ${Math.round(niv)}%`
+    return `OK · ${Math.round(niv)}%`
+  }
+
+  return etat === 'ACTIF' ? 'Actif' : 'Inactif'
+}
+
 // Methods we can actually invoke against the existing backend.
 // Setters (setTemperature/setCycle/...) are display-only — no dedicated endpoint yet.
 const ACTIVATING_METHODS = new Set(['ouvrir()', 'demarrer()', 'activer()', 'remplir()', 'distribuer()'])
@@ -187,7 +277,7 @@ function toUiItem(item) {
   const type = item?.type || 'Objet'
   const tax = taxonomyFor(type)
   const prefix = String(type).slice(0, 2).toUpperCase()
-  return {
+  const enriched = {
     ...item,
     id,
     type,
@@ -197,9 +287,30 @@ function toUiItem(item) {
     pieceNom: item?.pieceNom || 'Maison',
     marque: item?.marque || 'N/A',
     connectivite: item?.connectivite || 'WIFI',
-    valeur: item?.valeur || `${item?.etat || 'INACTIF'}`,
-    batterie: item?.batterie == null ? null : Number(item.batterie)
+    batterie: item?.batterie == null ? null : Number(item.batterie),
+    // Préserver les valeurs vivantes type-spécifiques renvoyées par le backend
+    position: item?.position == null ? null : Number(item.position),
+    cycle: item?.cycle ?? null,
+    programme: item?.programme ?? null,
+    tempLavage: item?.tempLavage == null ? null : Number(item.tempLavage),
+    vitesseEssorage: item?.vitesseEssorage == null ? null : Number(item.vitesseEssorage),
+    dureeRestante: item?.dureeRestante == null ? null : Number(item.dureeRestante),
+    chaine: item?.chaine == null ? null : Number(item.chaine),
+    volume: item?.volume == null ? null : Number(item.volume),
+    source: item?.source ?? null,
+    tempCible: item?.tempCible == null ? null : Number(item.tempCible),
+    mode: item?.mode ?? null,
+    niveauReservoir: item?.niveauReservoir == null ? (item?.niveau == null ? null : Number(item.niveau)) : Number(item.niveauReservoir),
+    animal: item?.animal ?? null,
+    portionGrammes: item?.portionGrammes == null ? null : Number(item.portionGrammes),
+    prochaineDistribution: item?.prochaineDistribution ?? null,
+    derniereDistribution: item?.derniereDistribution ?? null,
   }
+  // Étiquette d'état type-aware (calculée APRÈS l'enrichissement pour avoir les champs nouveaux dispo)
+  enriched.statusLabel = displayEtat(enriched)
+  // valeur conservée pour rétro-compat — sert de gros chiffre dans le DetailDrawer Lecture en direct
+  enriched.valeur = enriched.statusLabel
+  return enriched
 }
 
 function historyToUiItem(h, idx = 0) {
@@ -276,10 +387,36 @@ function RoomChip({ room, count, active, onClick }) {
   );
 }
 
+/**
+ * Mini-pill type-aware affichant l'état "humainement compréhensible" :
+ * Ouvert/Fermé pour Ouvrant, Cycle/Arrêt pour Appareil, Surveille/Off pour Capteur, OK/Vide pour BesoinAnimal.
+ */
+function pillForObj(obj) {
+  const active = obj.etat === 'ACTIF'
+  if (obj.branche === 'Ouvrant') {
+    const pos = Number(obj.position ?? 0)
+    if (pos <= 5) return { text: 'FERMÉ', color: 'var(--text-4)', dot: 'var(--text-4)' }
+    if (pos >= 95) return { text: 'OUVERT', color: 'var(--green)', dot: 'var(--green)' }
+    return { text: `${pos}%`, color: 'var(--accent)', dot: 'var(--accent)' }
+  }
+  if (obj.branche === 'BesoinAnimal' && active) {
+    const niv = Number(obj.niveauReservoir ?? obj.niveau ?? 0)
+    if (niv < 20) return { text: 'VIDE', color: 'var(--red)', dot: 'var(--red)' }
+    if (niv < 50) return { text: 'BAS', color: 'var(--accent)', dot: 'var(--accent)' }
+    return { text: 'OK', color: 'var(--green)', dot: 'var(--green)' }
+  }
+  if (obj.branche === 'Appareil' && active && obj.type === 'LaveLinge' && obj.dureeRestante != null && obj.dureeRestante > 0) {
+    return { text: `${obj.dureeRestante}m`, color: 'var(--accent)', dot: 'var(--accent)' }
+  }
+  return { text: active ? 'ON' : 'OFF', color: active ? 'var(--green)' : 'var(--text-4)', dot: active ? 'var(--green)' : 'var(--text-4)' }
+}
+
 /* ─── DEVICE TILE ─────────────────────────────── */
 function DeviceTile({ obj, onClick, actions, compact }) {
   const active = obj.etat === 'ACTIF';
   const lowBat = obj.batterie != null && obj.batterie < 20;
+  const pill = pillForObj(obj);
+  const statusText = obj.statusLabel || displayEtat(obj);
   return (
     <article onClick={onClick} style={{
       cursor: onClick ? 'pointer' : 'default', position:'relative',
@@ -302,12 +439,12 @@ function DeviceTile({ obj, onClick, actions, compact }) {
           <Icon name={ICONS[obj.type] || 'grid'} size={22}/>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:6, position:'relative' }}>
-          {active && <span style={{ position:'absolute', inset:0, borderRadius:'50%', background:'var(--green)', opacity:.4, animation:'ping 2s ease-out infinite' }}/>}
+          {active && <span style={{ position:'absolute', inset:0, borderRadius:'50%', background:pill.dot, opacity:.35, animation:'ping 2s ease-out infinite' }}/>}
           <div style={{
             width:8, height:8, borderRadius:'50%', position:'relative',
-            background: active ? 'var(--green)' : 'var(--text-4)',
+            background: pill.dot,
           }}/>
-          <span className="label" style={{ fontSize:9, color: active ? 'var(--green)' : 'var(--text-4)' }}>{active?'ON':'OFF'}</span>
+          <span className="label" style={{ fontSize:9, color: pill.color }}>{pill.text}</span>
         </div>
       </header>
 
@@ -321,14 +458,14 @@ function DeviceTile({ obj, onClick, actions, compact }) {
         <div style={{ fontSize:12, color:'var(--text-3)', marginTop:4 }}>{obj.pieceNom} · {obj.marque}</div>
       </div>
 
-      {obj.valeur && (
+      {statusText && (
         <div style={{
           padding:'10px 12px', borderRadius:10, background:'var(--bg-2)',
           fontSize:13, color: active ? 'var(--text)' : 'var(--text-3)',
           display:'flex', justifyContent:'space-between', alignItems:'center',
         }}>
           <span style={{ color:'var(--text-3)', fontSize:11 }}>État</span>
-          <span className="display" style={{ fontSize:16, color: active ? 'var(--accent)' : 'var(--text-2)' }}>{obj.valeur}</span>
+          <span className="display" style={{ fontSize:14, color: active ? 'var(--accent)' : 'var(--text-2)' }}>{statusText}</span>
         </div>
       )}
 
@@ -394,6 +531,399 @@ function Sparkline({ data, color = '#ffb547', height = 60 }) {
       <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       <circle cx={last[0]} cy={last[1]} r="3" fill={color}/>
     </svg>
+  )
+}
+
+/* ─── DEVICE CONTROL PANELS (par type) ─────── */
+
+/**
+ * Control panel pour LaveLinge : programme + température + essorage + lancer/arrêter cycle.
+ * État local non commité jusqu'au clic « Appliquer » ou « Lancer » pour éviter
+ * des PUT à chaque tick de slider.
+ */
+function LaveLingeControl({ obj, accent, canManage, onUpdate }) {
+  const [programme, setProgramme] = useState(obj.programme || 'COTON_60')
+  const [tempLavage, setTempLavage] = useState(obj.tempLavage ?? 60)
+  const [vitesseEssorage, setVitesseEssorage] = useState(obj.vitesseEssorage ?? 1200)
+  const [busy, setBusy] = useState(false)
+
+  // Resync state si l'objet change (drawer rouvert sur un autre lave-linge ou refresh)
+  useEffect(() => {
+    setProgramme(obj.programme || 'COTON_60')
+    setTempLavage(obj.tempLavage ?? 60)
+    setVitesseEssorage(obj.vitesseEssorage ?? 1200)
+  }, [obj.id, obj.programme, obj.tempLavage, obj.vitesseEssorage])
+
+  const isRunning = obj.etat === 'ACTIF' && obj.dureeRestante != null && obj.dureeRestante > 0
+  const dirty = programme !== obj.programme || tempLavage !== obj.tempLavage || vitesseEssorage !== obj.vitesseEssorage
+  const programmeMeta = PROGRAMMES_LAVAGE.find((p) => p.code === programme) || PROGRAMMES_LAVAGE[0]
+
+  const handleProgramme = (code) => {
+    setProgramme(code)
+    const meta = PROGRAMMES_LAVAGE.find((p) => p.code === code)
+    if (meta) {
+      setTempLavage(meta.temp)
+      setVitesseEssorage(meta.essorage)
+    }
+  }
+
+  const apply = async (extra = {}) => {
+    if (!canManage || !onUpdate) return
+    setBusy(true)
+    try {
+      await onUpdate(obj, { programme, tempLavage, vitesseEssorage, ...extra })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
+        <span>Programme & cycle</span>
+        {isRunning && (
+          <span className="mono" style={{ color: accent, textTransform:'none', letterSpacing:0 }}>
+            ⏱ {obj.dureeRestante} min restantes
+          </span>
+        )}
+      </div>
+      <div style={{ padding:'16px 18px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        <select
+          value={programme}
+          onChange={(e) => handleProgramme(e.target.value)}
+          disabled={!canManage || isRunning}
+          aria-label="Programme de lavage"
+          style={{ ...inputStyle, padding:'10px 12px' }}
+        >
+          {PROGRAMMES_LAVAGE.map((p) => (
+            <option key={p.code} value={p.code}>{p.label} · ~{p.dureeMin} min</option>
+          ))}
+        </select>
+
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>Température</span>
+            <span className="mono num" style={{ color: accent }}>{tempLavage}°C</span>
+          </div>
+          <input
+            type="range" min="0" max="95" step="5"
+            value={tempLavage}
+            onChange={(e) => setTempLavage(Number(e.target.value))}
+            disabled={!canManage || isRunning}
+            aria-label="Température de lavage"
+            style={{ width:'100%', accentColor: accent }}
+          />
+        </div>
+
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>Essorage</span>
+            <span className="mono num" style={{ color: accent }}>{vitesseEssorage} tr/min</span>
+          </div>
+          <input
+            type="range" min="0" max="1600" step="200"
+            value={vitesseEssorage}
+            onChange={(e) => setVitesseEssorage(Number(e.target.value))}
+            disabled={!canManage || isRunning}
+            aria-label="Vitesse d'essorage"
+            style={{ width:'100%', accentColor: accent }}
+          />
+        </div>
+
+        {canManage && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', flexWrap:'wrap' }}>
+            {dirty && !isRunning && (
+              <button type="button" onClick={() => apply()} disabled={busy} style={{ ...ctaSec, padding:'8px 14px', fontSize:12 }}>
+                Enregistrer
+              </button>
+            )}
+            {!isRunning ? (
+              <button type="button" onClick={() => apply({ cycleAction: 'start' })} disabled={busy} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12 }}>
+                ▶ Lancer cycle
+              </button>
+            ) : (
+              <button type="button" onClick={() => apply({ cycleAction: 'stop' })} disabled={busy} style={{ ...ctaSec, padding:'8px 14px', fontSize:12, color:'var(--red)', borderColor:'var(--red)' }}>
+                ■ Arrêter
+              </button>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize:10, color:'var(--text-4)' }}>
+          Programme {programmeMeta.label} · durée prévue {programmeMeta.dureeMin} min
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Télécommande TV : volume + chaîne (boutons -/+) + sélecteur de source.
+ */
+function TelevisionControl({ obj, accent, canManage, onUpdate }) {
+  const [volume, setVolume] = useState(obj.volume ?? 25)
+  const [chaine, setChaine] = useState(obj.chaine ?? 1)
+  const [source, setSource] = useState(obj.source || 'LIVE_TV')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setVolume(obj.volume ?? 25)
+    setChaine(obj.chaine ?? 1)
+    setSource(obj.source || 'LIVE_TV')
+  }, [obj.id, obj.volume, obj.chaine, obj.source])
+
+  const dirty = volume !== obj.volume || chaine !== obj.chaine || source !== obj.source
+
+  const apply = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy(true)
+    try {
+      await onUpdate(obj, { volume, chaine, source })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const isLive = source === 'LIVE_TV'
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Télécommande</div>
+      <div style={{ padding:'16px 18px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        <select
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          disabled={!canManage}
+          aria-label="Source d'entrée"
+          style={{ ...inputStyle, padding:'10px 12px' }}
+        >
+          {SOURCES_TV.map((s) => (
+            <option key={s.code} value={s.code}>{s.label}</option>
+          ))}
+        </select>
+
+        {isLive && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+            <span style={{ fontSize:11, color:'var(--text-3)' }}>Chaîne</span>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <button type="button" onClick={() => setChaine(Math.max(1, chaine - 1))} disabled={!canManage} style={{ ...iconBtn, width:32, height:32 }} aria-label="Chaîne précédente">−</button>
+              <span className="display num" style={{ fontSize:24, color: accent, minWidth:48, textAlign:'center' }}>{chaine}</span>
+              <button type="button" onClick={() => setChaine(Math.min(99, chaine + 1))} disabled={!canManage} style={{ ...iconBtn, width:32, height:32 }} aria-label="Chaîne suivante">+</button>
+            </div>
+          </div>
+        )}
+
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>Volume</span>
+            <span className="mono num" style={{ color: accent }}>{volume}</span>
+          </div>
+          <input
+            type="range" min="0" max="100" step="1"
+            value={volume}
+            onChange={(e) => setVolume(Number(e.target.value))}
+            disabled={!canManage}
+            aria-label="Volume"
+            style={{ width:'100%', accentColor: accent }}
+          />
+        </div>
+
+        {canManage && dirty && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button type="button" onClick={apply} disabled={busy} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12 }}>
+              {busy ? 'Application…' : 'Appliquer'} <Icon name="arrow" size={12}/>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Thermostat : température cible (consigne) + mode (Auto / Chauffe / Eco / Off).
+ * Affiche la température mesurée la plus récente issue de DonneeCapteur.
+ */
+function ThermostatControl({ obj, accent, canManage, onUpdate, latestMeasure }) {
+  const [tempCible, setTempCible] = useState(obj.tempCible ?? 20)
+  const [mode, setMode] = useState(obj.mode || 'AUTO')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setTempCible(obj.tempCible ?? 20)
+    setMode(obj.mode || 'AUTO')
+  }, [obj.id, obj.tempCible, obj.mode])
+
+  const dirty = tempCible !== obj.tempCible || mode !== obj.mode
+  const tempActuelle = latestMeasure?.valeur
+
+  const apply = async () => {
+    if (!canManage || !onUpdate) return
+    setBusy(true)
+    try {
+      await onUpdate(obj, { tempCible, mode })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>Consigne thermique</div>
+      <div style={{ padding:'18px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between' }}>
+          <div>
+            <div className="label" style={{ fontSize:9 }}>Mesurée</div>
+            <div className="display num" style={{ fontSize:30, color:'var(--text)', lineHeight:1 }}>
+              {tempActuelle != null ? `${tempActuelle.toFixed(1)}°` : '—'}
+            </div>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div className="label" style={{ fontSize:9 }}>Cible</div>
+            <div className="display num" style={{ fontSize:30, color: accent, lineHeight:1 }}>
+              {tempCible.toFixed(1)}°
+            </div>
+          </div>
+        </div>
+
+        <input
+          type="range" min="10" max="30" step="0.5"
+          value={tempCible}
+          onChange={(e) => setTempCible(Number(e.target.value))}
+          disabled={!canManage}
+          aria-label="Température cible"
+          style={{ width:'100%', accentColor: accent }}
+        />
+
+        <div style={{ display:'flex', gap:6 }}>
+          {MODES_THERMOSTAT.map((m) => (
+            <button
+              key={m.code}
+              type="button"
+              onClick={() => canManage && setMode(m.code)}
+              disabled={!canManage}
+              aria-pressed={mode === m.code}
+              style={{
+                flex:1, padding:'8px 6px', borderRadius:8, fontSize:11, fontWeight: mode === m.code ? 600 : 400,
+                background: mode === m.code ? accent : 'var(--bg-3)',
+                color: mode === m.code ? '#0e1116' : 'var(--text-2)',
+                border:`1px solid ${mode === m.code ? accent : 'var(--line)'}`,
+              }}
+            >{m.label}</button>
+          ))}
+        </div>
+
+        {canManage && dirty && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+            <button type="button" onClick={apply} disabled={busy} style={{ ...ctaPri, background: accent, padding:'8px 14px', fontSize:12 }}>
+              {busy ? 'Application…' : 'Appliquer'} <Icon name="arrow" size={12}/>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Pet feeder (Nourriture / Eau) : niveau du réservoir, portion par distribution,
+ * actions Distribuer maintenant / Remplir réservoir. La planification réelle
+ * est gérée par les scénarios programmés (Petit-déj 8h, Dîner 18h, Eau 7h…).
+ */
+function PetFeederControl({ obj, accent, canManage, onUpdate }) {
+  const niveau = Number(obj.niveauReservoir ?? obj.niveau ?? 0)
+  const [portion, setPortion] = useState(obj.portionGrammes ?? 30)
+  const [busy, setBusy] = useState(null)
+
+  useEffect(() => {
+    setPortion(obj.portionGrammes ?? 30)
+  }, [obj.id, obj.portionGrammes])
+
+  const fillColor = niveau < 20 ? 'var(--red)' : niveau < 50 ? accent : 'var(--green)'
+  const isWater = obj.type === 'Eau'
+  const unit = isWater ? 'mL' : 'g'
+
+  const trigger = async (action) => {
+    if (!canManage || !onUpdate) return
+    setBusy(action)
+    try {
+      await onUpdate(obj, { petAction: action, portionGrammes: portion })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const fmtTime = (iso) => {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    return d.toLocaleString('fr-FR', { weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+  }
+
+  return (
+    <div>
+      <div className="label" style={{ marginBottom:10 }}>{isWater ? 'Fontaine' : 'Distributeur'} · {obj.animal || 'Animal'}</div>
+      <div style={{ padding:'18px 20px', borderRadius:14, background:'var(--bg-2)', border:'1px solid var(--line)', display:'flex', flexDirection:'column', gap:14 }}>
+        {/* Jauge réservoir */}
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:6 }}>
+            <span style={{ fontSize:12, color:'var(--text-2)' }}>Réservoir</span>
+            <span className="display num" style={{ fontSize:22, color: fillColor }}>{Math.round(niveau)}%</span>
+          </div>
+          <div style={{ height:10, background:'var(--bg-3)', borderRadius:99, overflow:'hidden' }}>
+            <div style={{
+              height:'100%', width:`${niveau}%`, borderRadius:99,
+              background: fillColor, transition:'width .4s, background .2s',
+            }}/>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-3)', marginBottom:4 }}>
+            <span>Portion par distribution</span>
+            <span className="mono num" style={{ color: accent }}>{portion} {unit}</span>
+          </div>
+          <input
+            type="range" min={isWater ? 20 : 10} max={isWater ? 200 : 80} step="5"
+            value={portion}
+            onChange={(e) => setPortion(Number(e.target.value))}
+            disabled={!canManage}
+            style={{ width:'100%', accentColor: accent }}
+          />
+        </div>
+
+        <div style={{ fontSize:11, color:'var(--text-3)', display:'flex', justifyContent:'space-between' }}>
+          <span>Dernière distribution</span>
+          <span className="mono">{fmtTime(obj.derniereDistribution)}</span>
+        </div>
+        <div style={{ fontSize:11, color:'var(--text-3)', display:'flex', justifyContent:'space-between' }}>
+          <span>Prochaine prévue</span>
+          <span className="mono">{fmtTime(obj.prochaineDistribution)}</span>
+        </div>
+
+        {canManage && (
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <button
+              type="button"
+              onClick={() => trigger('distribuer')}
+              disabled={busy != null || niveau <= 0}
+              style={{ ...ctaPri, background: accent, padding:'10px 14px', fontSize:12, flex:1 }}
+            >
+              {busy === 'distribuer' ? 'Distribution…' : isWater ? '💧 Servir' : '🍽 Distribuer'} ({portion}{unit})
+            </button>
+            <button
+              type="button"
+              onClick={() => trigger('remplir')}
+              disabled={busy != null || niveau >= 100}
+              style={{ ...ctaSec, padding:'10px 14px', fontSize:12, flex:1 }}
+            >
+              {busy === 'remplir' ? 'Remplissage…' : '↑ Remplir 100%'}
+            </button>
+          </div>
+        )}
+        <div style={{ fontSize:10, color:'var(--text-4)' }}>
+          Astuce : programmez une distribution récurrente via Routines (Gestion → Routines → Nouveau scénario).
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -522,7 +1052,7 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
           {branche === 'Ouvrant' && (
             <div>
               <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
-                <span>Position</span>
+                <span>{obj.type === 'Porte' || obj.type === 'PorteGarage' ? 'Ouverture' : 'Position'}</span>
                 <span className="mono num" style={{ color: accent, textTransform:'none', letterSpacing:0, fontFamily:"'Geist Mono', monospace" }}>
                   {sliderPos != null ? `${sliderPos}%` : '—'}
                 </span>
@@ -540,10 +1070,23 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
                   aria-label={`Position de ${obj.nom}`}
                   style={{ width:'100%', accentColor: accent }}
                 />
-                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-4)' }}>
-                  <span>0% fermé</span>
-                  <span>50%</span>
-                  <span>100% ouvert</span>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {PRESETS_VOLET.map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => canManage && setSliderPos(preset.value)}
+                      disabled={!canManage}
+                      style={{
+                        flex:1, minWidth:0, padding:'6px 8px', borderRadius:8, fontSize:11,
+                        background: sliderPos === preset.value ? accent : 'var(--bg-3)',
+                        color: sliderPos === preset.value ? '#0e1116' : 'var(--text-2)',
+                        border:`1px solid ${sliderPos === preset.value ? accent : 'var(--line)'}`,
+                        fontWeight: sliderPos === preset.value ? 600 : 400,
+                        cursor: canManage ? 'pointer' : 'not-allowed',
+                      }}
+                    >{preset.label}</button>
+                  ))}
                 </div>
                 {canManage && (
                   <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
@@ -570,6 +1113,26 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
             </div>
           )}
 
+          {/* LaveLinge — programme + paramètres + lancer cycle */}
+          {obj.type === 'LaveLinge' && (
+            <LaveLingeControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
+          {/* Television — chaîne / volume / source */}
+          {obj.type === 'Television' && (
+            <TelevisionControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
+          {/* Thermostat — consigne + mode */}
+          {obj.type === 'Thermostat' && (
+            <ThermostatControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet} latestMeasure={sparkData[sparkData.length - 1]}/>
+          )}
+
+          {/* BesoinAnimal — réservoir + portion + distribuer/remplir */}
+          {branche === 'BesoinAnimal' && (
+            <PetFeederControl obj={obj} accent={accent} canManage={canManage} onUpdate={onUpdateObjet}/>
+          )}
+
           {branche === 'Capteur' && sparkData.length > 1 && (
             <div>
               <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>
@@ -588,17 +1151,32 @@ function DetailDrawer({ obj, onClose, canManage, onMethodInvoke, onUpdateObjet, 
             </div>
           )}
 
-          <div>
-            <div className="label" style={{ marginBottom:10 }}>Attributs</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              {Object.entries(obj).filter(([k,v]) => v != null && !['id','code','nom','branche','marque','valeur','pieceNom','connectivite','position','service','type','etat'].includes(k)).map(([k,v]) => (
-                <div key={k} style={{ padding:'10px 12px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
-                  <div className="label" style={{ fontSize:9, marginBottom:3 }}>{k}</div>
-                  <div className="display" style={{ fontSize:15, color:'var(--text)' }}>{String(v)}</div>
+          {/* Métadonnées résiduelles (fields type-aware déjà montés dans les panels dédiés) */}
+          {(() => {
+            const HIDDEN = new Set([
+              'id','code','nom','branche','marque','valeur','pieceNom','connectivite','position','service','type','etat',
+              'programme','tempLavage','vitesseEssorage','dureeRestante','dureeProgrammeMin','dateDebutCycle','cycle','consoEnergie',
+              'chaine','volume','source',
+              'tempCible','mode',
+              'niveau','niveauReservoir','animal','portionGrammes','derniereDistribution','prochaineDistribution',
+              'statusLabel','batterie','dateInscription','prenom',
+            ])
+            const entries = Object.entries(obj).filter(([k, v]) => v != null && v !== '' && !HIDDEN.has(k))
+            if (entries.length === 0) return null
+            return (
+              <div>
+                <div className="label" style={{ marginBottom:10 }}>Métadonnées</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  {entries.map(([k, v]) => (
+                    <div key={k} style={{ padding:'10px 12px', borderRadius:10, background:'var(--bg-2)', border:'1px solid var(--line)' }}>
+                      <div className="label" style={{ fontSize:9, marginBottom:3 }}>{k}</div>
+                      <div className="display" style={{ fontSize:14, color:'var(--text)' }}>{String(v)}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            )
+          })()}
 
           <div>
             <div className="label" style={{ marginBottom:10, display:'flex', justifyContent:'space-between' }}>

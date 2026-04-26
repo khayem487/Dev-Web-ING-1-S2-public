@@ -4,10 +4,7 @@ target/
 !**/src/test/**/target/
 
 ### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -52,3 +49,9 @@ frontend/.vite/
 ### Local/private notes ###
 SYNC_CONTEXT.md
 .local/
+
+### H2 file-mode database (persists state across restarts) ###
+data/
+*.mv.db
+*.trace.db
+*.lock.db

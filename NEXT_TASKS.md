@@ -118,6 +118,14 @@
   - [ ] Endpoint `GET /api/gestion/historique?objetId={id}` pour filtrer côté serveur (le front filtre actuellement en mémoire).
   - [ ] Mettre à jour `DataSeeder` pour seeder au moins 1 instance de chaque nouveau type (utile pour tester les scénarios "Sécurité" avec une vraie Alarme).
 
+- [x] **P10 Senior product pass — persistence, semantics, remote control** (livré 2026-04-26)
+  - [x] **M1** H2 file mode (`./data/maison-db`), `ObjetConnecteDTO` exposant les valeurs vivantes type-spécifiques, `displayEtat`/`pillForObj` côté front, presets Volet
+  - [x] **M2** LaveLinge : `ProgrammeLavage` enum (7 cycles), `tempLavage`/`vitesseEssorage`/`dateDebutCycle`/`dureeProgrammeMin`, `LaveLingeControl` UI avec lancer/arrêter cycle
+  - [x] **M3** Television : `chaine`/`volume`/`source` (catalogue `SourceTV`), `TelevisionControl` UI avec télécommande
+  - [x] **M4** Thermostat : `tempCible`/`mode` (catalogue `ModeThermostat`), `ThermostatControl` UI avec mesurée vs cible
+  - [x] **M5** Pet feeders : `portionGrammes`/`derniereDistribution`/`prochaineDistribution`, `distribuer()`/`remplir()`, `PetFeederControl` UI, 4 scénarios programmés (Petit-déj, Dîner, Eau, Lessive Eco), `ScenarioService` étendu pour appeler `.distribuer()` quand un scénario cible un BesoinAnimal
+  - [x] **M6** Historique de-noising : `PointsService.awardPoints` (silent) pour `CONSULT_PROFILE` et `SEARCH_OBJETS`
+
 ## Working rules
 - Update this file after each meaningful step.
 - Keep tasks small and testable.

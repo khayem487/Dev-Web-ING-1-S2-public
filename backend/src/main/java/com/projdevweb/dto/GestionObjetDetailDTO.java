@@ -2,20 +2,22 @@ package com.projdevweb.dto;
 
 import com.projdevweb.model.Appareil;
 import com.projdevweb.model.BesoinAnimal;
-import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
 import com.projdevweb.model.Connectivite;
-import com.projdevweb.model.Eau;
 import com.projdevweb.model.Etat;
 import com.projdevweb.model.LaveLinge;
-import com.projdevweb.model.Nourriture;
 import com.projdevweb.model.ObjetConnecte;
 import com.projdevweb.model.Ouvrant;
-import com.projdevweb.model.Porte;
 import com.projdevweb.model.Television;
 import com.projdevweb.model.Thermostat;
-import com.projdevweb.model.Volet;
 
+import java.time.Instant;
+
+/**
+ * Détail enrichi pour l'éditeur Gestion. Inclut TOUS les champs type-spécifiques
+ * pour pré-remplir le formulaire et afficher les compteurs live (cycle restant,
+ * prochaine distribution pet feeder, etc.).
+ */
 public record GestionObjetDetailDTO(
         Long id,
         String nom,
@@ -28,37 +30,96 @@ public record GestionObjetDetailDTO(
         Float batterie,
         Long pieceId,
         String pieceNom,
+
+        // Ouvrant
         Integer position,
+
+        // Capteur
         String zone,
+
+        // Appareil commun
         String cycle,
         Float consoEnergie,
+
+        // LaveLinge
+        String programme,
+        Integer tempLavage,
+        Integer vitesseEssorage,
+        Integer dureeProgrammeMin,
+        Instant dateDebutCycle,
+        Integer dureeRestante,
+
+        // Television
+        Integer chaine,
+        Integer volume,
+        String source,
+
+        // Thermostat
+        Float tempCible,
+        String mode,
+
+        // BesoinAnimal
         Float niveau,
-        String animal
+        String animal,
+        Integer portionGrammes,
+        Instant derniereDistribution,
+        Instant prochaineDistribution
 ) {
 
     public static GestionObjetDetailDTO from(ObjetConnecte o) {
         String branche = branche(o);
 
-        Integer position = null;
-        String zone = null;
+        Integer position = (o instanceof Ouvrant ouvrant) ? ouvrant.getPosition() : null;
+        String zone = (o instanceof Capteur cap) ? cap.getZone() : null;
+
         String cycle = null;
         Float consoEnergie = null;
-        Float niveau = null;
-        String animal = null;
+        String programme = null;
+        Integer tempLavage = null;
+        Integer vitesseEssorage = null;
+        Integer dureeProgrammeMin = null;
+        Instant dateDebutCycle = null;
+        Integer dureeRestante = null;
+        Integer chaine = null;
+        Integer volume = null;
+        String source = null;
 
-        if (o instanceof Ouvrant ouvrant) {
-            position = ouvrant.getPosition();
-        }
-        if (o instanceof Capteur capteur) {
-            zone = capteur.getZone();
-        }
         if (o instanceof Appareil appareil) {
             cycle = appareil.getCycle();
             consoEnergie = appareil.getConsoEnergie();
         }
-        if (o instanceof BesoinAnimal besoinAnimal) {
-            niveau = besoinAnimal.getNiveau();
-            animal = besoinAnimal.getAnimal();
+        if (o instanceof LaveLinge ll) {
+            programme = ll.getProgramme();
+            tempLavage = ll.getTempLavage();
+            vitesseEssorage = ll.getVitesseEssorage();
+            dureeProgrammeMin = ll.getDureeProgrammeMin();
+            dateDebutCycle = ll.getDateDebutCycle();
+            dureeRestante = ll.computeDureeRestante();
+        }
+        if (o instanceof Television tv) {
+            chaine = tv.getChaine();
+            volume = tv.getVolume();
+            source = tv.getSource();
+        }
+
+        Float tempCible = null;
+        String mode = null;
+        if (o instanceof Thermostat th) {
+            tempCible = th.getTempCible();
+            mode = th.getMode();
+        }
+
+        Float niveau = null;
+        String animal = null;
+        Integer portionGrammes = null;
+        Instant derniere = null;
+        Instant prochaine = null;
+        if (o instanceof BesoinAnimal ba) {
+            niveau = ba.getNiveau();
+            animal = ba.getAnimal();
+            portionGrammes = ba.getPortionGrammes();
+            derniere = ba.getDerniereDistribution();
+            prochaine = ba.getProchaineDistribution();
         }
 
         return new GestionObjetDetailDTO(
@@ -77,8 +138,22 @@ public record GestionObjetDetailDTO(
                 zone,
                 cycle,
                 consoEnergie,
+                programme,
+                tempLavage,
+                vitesseEssorage,
+                dureeProgrammeMin,
+                dateDebutCycle,
+                dureeRestante,
+                chaine,
+                volume,
+                source,
+                tempCible,
+                mode,
                 niveau,
-                animal
+                animal,
+                portionGrammes,
+                derniere,
+                prochaine
         );
     }
 

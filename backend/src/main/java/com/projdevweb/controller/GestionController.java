@@ -11,6 +11,8 @@ import com.projdevweb.dto.HistoriqueActionDTO;
 import com.projdevweb.dto.ObjetConnecteDTO;
 import com.projdevweb.dto.ServiceSummaryDTO;
 import com.projdevweb.model.ActionType;
+import com.projdevweb.model.Appareil;
+import com.projdevweb.model.BesoinAnimal;
 import com.projdevweb.model.Camera;
 import com.projdevweb.model.Capteur;
 import com.projdevweb.model.Connectivite;
@@ -334,9 +336,24 @@ public class GestionController {
     }
 
     private void applySpecific(ObjetConnecte objet, GestionObjetUpsertRequest request) {
+        // Ouvrant — slider de position (0–100)
         if (objet instanceof Ouvrant ouvrant) {
             if (request.position() != null) {
-                ouvrant.setPosition(request.position());
+                ouvrant.setPosition(Math.max(0, Math.min(100, request.position())));
+            }
+            return;
+        }
+
+        // Thermostat avant Capteur (sous-classe la plus spécifique d'abord)
+        if (objet instanceof Thermostat thermostat) {
+            if (request.zone() != null) {
+                thermostat.setZone(trimToNull(request.zone()));
+            }
+            if (request.tempCible() != null) {
+                thermostat.setTempCible(request.tempCible());
+            }
+            if (request.mode() != null && !request.mode().isBlank()) {
+                thermostat.setMode(request.mode().trim().toUpperCase(Locale.ROOT));
             }
             return;
         }
@@ -348,16 +365,7 @@ public class GestionController {
             return;
         }
 
-        if (objet instanceof Television television) {
-            if (request.cycle() != null) {
-                television.setCycle(trimToNull(request.cycle()));
-            }
-            if (request.consoEnergie() != null) {
-                television.setConsoEnergie(request.consoEnergie());
-            }
-            return;
-        }
-
+        // LaveLinge — programme + paramètres + commande start/stop cycle
         if (objet instanceof LaveLinge laveLinge) {
             if (request.cycle() != null) {
                 laveLinge.setCycle(trimToNull(request.cycle()));
@@ -365,25 +373,78 @@ public class GestionController {
             if (request.consoEnergie() != null) {
                 laveLinge.setConsoEnergie(request.consoEnergie());
             }
+            if (request.programme() != null && !request.programme().isBlank()) {
+                String prog = request.programme().trim().toUpperCase(Locale.ROOT);
+                laveLinge.setProgramme(prog);
+                // Aligner les paramètres suggérés par le programme si l'UI ne les a pas overridé
+                try {
+                    LaveLinge.ProgrammeLavage p = LaveLinge.ProgrammeLavage.valueOf(prog);
+                    if (request.tempLavage() == null) laveLinge.setTempLavage(p.getTempSuggeree());
+                    if (request.vitesseEssorage() == null) laveLinge.setVitesseEssorage(p.getEssorageSuggere());
+                } catch (IllegalArgumentException ignored) { /* programme libre */ }
+            }
+            if (request.tempLavage() != null) {
+                laveLinge.setTempLavage(Math.max(0, Math.min(95, request.tempLavage())));
+            }
+            if (request.vitesseEssorage() != null) {
+                laveLinge.setVitesseEssorage(Math.max(0, Math.min(2000, request.vitesseEssorage())));
+            }
+            if ("start".equalsIgnoreCase(request.cycleAction())) {
+                laveLinge.setEtat(Etat.ACTIF);
+                laveLinge.demarrerCycle();
+            } else if ("stop".equalsIgnoreCase(request.cycleAction())) {
+                laveLinge.setEtat(Etat.INACTIF);
+                laveLinge.arreterCycle();
+            }
             return;
         }
 
-        if (objet instanceof Nourriture nourriture) {
-            if (request.niveau() != null) {
-                nourriture.setNiveau(request.niveau());
+        // Television — chaîne / volume / source
+        if (objet instanceof Television television) {
+            if (request.cycle() != null) {
+                television.setCycle(trimToNull(request.cycle()));
             }
-            if (request.animal() != null) {
-                nourriture.setAnimal(trimToNull(request.animal()));
+            if (request.consoEnergie() != null) {
+                television.setConsoEnergie(request.consoEnergie());
+            }
+            if (request.chaine() != null) {
+                television.setChaine(request.chaine());
+            }
+            if (request.volume() != null) {
+                television.setVolume(request.volume());
+            }
+            if (request.source() != null && !request.source().isBlank()) {
+                television.setSource(request.source().trim().toUpperCase(Locale.ROOT));
             }
             return;
         }
 
-        if (objet instanceof Eau eau) {
+        // Appareil générique (autres feuilles non encore spécialisées)
+        if (objet instanceof Appareil appareil) {
+            if (request.cycle() != null) {
+                appareil.setCycle(trimToNull(request.cycle()));
+            }
+            if (request.consoEnergie() != null) {
+                appareil.setConsoEnergie(request.consoEnergie());
+            }
+            return;
+        }
+
+        // BesoinAnimal — réservoir, animal, portion + commandes distribuer/remplir
+        if (objet instanceof BesoinAnimal ba) {
             if (request.niveau() != null) {
-                eau.setNiveau(request.niveau());
+                ba.setNiveau(request.niveau());
             }
             if (request.animal() != null) {
-                eau.setAnimal(trimToNull(request.animal()));
+                ba.setAnimal(trimToNull(request.animal()));
+            }
+            if (request.portionGrammes() != null) {
+                ba.setPortionGrammes(Math.max(1, Math.min(500, request.portionGrammes())));
+            }
+            if ("distribuer".equalsIgnoreCase(request.petAction())) {
+                ba.distribuer();
+            } else if ("remplir".equalsIgnoreCase(request.petAction())) {
+                ba.remplir();
             }
         }
     }

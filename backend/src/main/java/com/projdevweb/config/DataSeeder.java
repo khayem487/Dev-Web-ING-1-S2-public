@@ -131,26 +131,44 @@ public class DataSeeder implements CommandLineRunner {
         Map<String, Piece> pieceByName = pieceRepository.findAll().stream()
                 .collect(Collectors.toMap(Piece::getNom, Function.identity()));
 
+        // Ouvrants — position 0=fermé, 100=ouvert
+        Porte porteEntree = new Porte("Porte d'entrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 98f, getPiece(pieceByName, "Salon"), 100);
+        Volet voletSalon = new Volet("Volet baie vitrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 81f, getPiece(pieceByName, "Salon"), 65);
+        Volet voletChambre = new Volet("Volet chambre", "Somfy", Etat.ACTIF, Connectivite.BLUETOOTH, 74f, getPiece(pieceByName, "Chambre parentale"), 30);
+        Porte porteGarage = new Porte("Porte garage", "Nice", Etat.INACTIF, Connectivite.WIFI, 55f, getPiece(pieceByName, "Garage"), 0);
+
+        // Capteurs — Thermostat porte une consigne (tempCible) + mode
+        Thermostat thermoSalon = new Thermostat("Thermostat salon", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Zone jour");
+        thermoSalon.setTempCible(21.0f);
+        thermoSalon.setMode(Thermostat.ModeThermostat.AUTO.name());
+        Thermostat thermoChambre = new Thermostat("Thermostat chambre", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"), "Zone nuit");
+        thermoChambre.setTempCible(19.0f);
+        thermoChambre.setMode(Thermostat.ModeThermostat.ECO.name());
+        Camera camEntree = new Camera("Caméra entrée", "Arlo", Etat.ACTIF, Connectivite.WIFI, 89f, getPiece(pieceByName, "Salon"), "Entrée");
+        Camera camGarage = new Camera("Caméra garage", "Arlo", Etat.ACTIF, Connectivite.WIFI, 63f, getPiece(pieceByName, "Garage"), "Garage");
+
+        // Appareils — Television sur LIVE_TV, LaveLinge avec programme Eco 40 prêt à lancer
+        Television tv = new Television("TV salon", "Samsung", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Direct");
+        tv.setChaine(7);
+        tv.setVolume(28);
+        tv.setSource(Television.SourceTV.LIVE_TV.name());
+
+        LaveLinge laveLinge = new LaveLinge("Lave-linge", "LG", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"), "Eco 40");
+        laveLinge.setProgramme(LaveLinge.ProgrammeLavage.ECO_40.name());
+        laveLinge.setTempLavage(LaveLinge.ProgrammeLavage.ECO_40.getTempSuggeree());
+        laveLinge.setVitesseEssorage(LaveLinge.ProgrammeLavage.ECO_40.getEssorageSuggere());
+
+        // Besoins animaux — portion par défaut 30g, chat
+        Nourriture distributeur = new Nourriture("Distributeur croquettes", "PetSafe", Etat.ACTIF, Connectivite.WIFI, 79f, getPiece(pieceByName, "Cuisine"), 58f, "Chat");
+        distributeur.setPortionGrammes(30);
+        Eau fontaine = new Eau("Fontaine à eau", "PetKit", Etat.ACTIF, Connectivite.WIFI, 68f, getPiece(pieceByName, "Cuisine"), 46f, "Chat");
+        fontaine.setPortionGrammes(50);
+
         objetConnecteRepository.saveAll(List.of(
-                // Ouvrants
-                new Porte("Porte d'entrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 98f, getPiece(pieceByName, "Salon"), 100),
-                new Volet("Volet baie vitrée", "Somfy", Etat.ACTIF, Connectivite.WIFI, 81f, getPiece(pieceByName, "Salon"), 65),
-                new Volet("Volet chambre", "Somfy", Etat.ACTIF, Connectivite.BLUETOOTH, 74f, getPiece(pieceByName, "Chambre parentale"), 30),
-                new Porte("Porte garage", "Nice", Etat.INACTIF, Connectivite.WIFI, 55f, getPiece(pieceByName, "Garage"), 0),
-
-                // Capteurs
-                new Thermostat("Thermostat salon", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Zone jour"),
-                new Thermostat("Thermostat chambre", "Netatmo", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Chambre parentale"), "Zone nuit"),
-                new Camera("Caméra entrée", "Arlo", Etat.ACTIF, Connectivite.WIFI, 89f, getPiece(pieceByName, "Salon"), "Entrée"),
-                new Camera("Caméra garage", "Arlo", Etat.ACTIF, Connectivite.WIFI, 63f, getPiece(pieceByName, "Garage"), "Garage"),
-
-                // Appareils
-                new Television("TV salon", "Samsung", Etat.ACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salon"), "Veille"),
-                new LaveLinge("Lave-linge", "LG", Etat.INACTIF, Connectivite.WIFI, null, getPiece(pieceByName, "Salle de bain"), "Eco 40"),
-
-                // Besoins animaux
-                new Nourriture("Distributeur croquettes", "PetSafe", Etat.ACTIF, Connectivite.WIFI, 79f, getPiece(pieceByName, "Cuisine"), 58f, "Chat"),
-                new Eau("Fontaine à eau", "PetKit", Etat.ACTIF, Connectivite.WIFI, 68f, getPiece(pieceByName, "Cuisine"), 46f, "Chat")
+                porteEntree, voletSalon, voletChambre, porteGarage,
+                thermoSalon, thermoChambre, camEntree, camGarage,
+                tv, laveLinge,
+                distributeur, fontaine
         ));
     }
 
@@ -325,7 +343,33 @@ public class DataSeeder implements CommandLineRunner {
         addAction(securite, objetsByNom.get("Caméra entrée"), Etat.ACTIF, null);
         addAction(securite, objetsByNom.get("Caméra garage"), Etat.ACTIF, null);
 
-        scenarioRepository.saveAll(List.of(bonjour, bonsoir, cinema, securite));
+        // 🐱 Petit-déj du chat — chaque jour à 8h00 : distribuer une portion croquettes
+        Scenario petitDej = new Scenario("Petit-déj du chat", "🐱", ScenarioType.SCHEDULED);
+        petitDej.setDescription("Distribution automatique des croquettes du matin à 8h00.");
+        petitDej.setCron("0 0 8 * * *");
+        addAction(petitDej, objetsByNom.get("Distributeur croquettes"), Etat.ACTIF, null);
+
+        // 🐾 Dîner du chat — chaque jour à 18h00
+        Scenario diner = new Scenario("Dîner du chat", "🐾", ScenarioType.SCHEDULED);
+        diner.setDescription("Distribution automatique du soir à 18h00.");
+        diner.setCron("0 0 18 * * *");
+        addAction(diner, objetsByNom.get("Distributeur croquettes"), Etat.ACTIF, null);
+
+        // 💧 Eau fraîche — chaque jour à 7h00 : remet la fontaine à 100 %
+        Scenario eauFraiche = new Scenario("Eau fraîche", "💧", ScenarioType.SCHEDULED);
+        eauFraiche.setDescription("Remplissage automatique de la fontaine chaque matin à 7h00.");
+        eauFraiche.setCron("0 0 7 * * *");
+        addAction(eauFraiche, objetsByNom.get("Fontaine à eau"), Etat.ACTIF, null);
+
+        // 🧺 Lessive nuit — manuel : lance le cycle Eco du lave-linge
+        Scenario lessive = new Scenario("Lessive Eco", "🧺", ScenarioType.MANUAL);
+        lessive.setDescription("Démarre un cycle Eco du lave-linge (programme + paramètres pré-réglés).");
+        addAction(lessive, objetsByNom.get("Lave-linge"), Etat.ACTIF, null);
+
+        scenarioRepository.saveAll(List.of(
+                bonjour, bonsoir, cinema, securite,
+                petitDej, diner, eauFraiche, lessive
+        ));
     }
 
     private void addAction(Scenario scenario, ObjetConnecte objet, Etat etat, Integer position) {
