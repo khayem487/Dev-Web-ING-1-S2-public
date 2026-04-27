@@ -196,7 +196,6 @@ npm.cmd run build
 
 - `backend/` : API Spring Boot + modèles JPA + services + controllers
 - `frontend/` : app React (UI complète)
-- `docs/` : scripts et artefacts de démo/rapport
 - `docker-compose.mysql.yml` : stack MySQL locale
 - `render.yaml`, `Dockerfile` : base de déploiement
 
@@ -211,14 +210,6 @@ npm.cmd run build
 5. Montrer l’historique + stats + maintenance
 6. Se connecter en `admin@demo.local` → module Administration
 
-Rapport soutenance (LaTeX + PDF):
-- `docs/RAPPORT.tex`
-- `docs/RAPPORT.pdf`
-
-Smoke test rapide avant passage:
-```bash
-powershell.exe -ExecutionPolicy Bypass -File scripts\demo-smoke.ps1
-```
 
 ---
 
