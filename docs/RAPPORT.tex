@@ -1,0 +1,393 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{fancyvrb}
+\usepackage{graphicx}
+\usepackage{pdflscape}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit}
+
+\geometry{margin=2.1cm}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\setlist[itemize]{noitemsep,topsep=4pt}
+\setlist[enumerate]{noitemsep,topsep=4pt}
+
+\title{\textbf{Rapport de Projet -- Developpement Web ING1}\\
+\large Plateforme Maison Intelligente (Spring Boot + React)}
+\author{Khayem Ben Ghorbel \and Rindra \and Ziyad \and Anastasia \and Valerie}
+\date{Annee universitaire 2025--2026}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ------------------------------------------------------------
+\section{Introduction}
+
+Ce document presente la realisation du projet de Developpement Web ING1 autour du theme
+\textbf{Maison Intelligente}. L'objectif est de livrer une application web complete,
+avec architecture full-stack, base de donnees persistante, gestion des roles,
+automatisation domotique et module d'administration.
+
+Le projet respecte les attentes du module :
+\begin{itemize}
+  \item frameworks backend/frontend,
+  \item persistance des donnees,
+  \item recherche multi-criteres,
+  \item separation claire des modules,
+  \item demonstration fonctionnelle complete.
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Objectifs et perimetre}
+
+\subsection{Objectifs fonctionnels}
+\begin{enumerate}
+  \item \textbf{Information} : consultation publique des pieces, objets et services.
+  \item \textbf{Visualisation} : espace membre (authentification, profil, consultation detaillee).
+  \item \textbf{Gestion} : pilotage avance des objets, scenarios, maintenance, statistiques.
+  \item \textbf{Administration} : gestion utilisateurs, droits et validation des comptes.
+\end{enumerate}
+
+\subsection{Objectifs non-fonctionnels}
+\begin{itemize}
+  \item interface responsive,
+  \item securite d'acces par role et niveau,
+  \item traces d'actions,
+  \item disponibilite locale et deploiement cloud (Render).
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Architecture technique}
+
+\subsection{Stack}
+\begin{itemize}
+  \item \textbf{Backend} : Java 21, Spring Boot 3.3, Spring Data JPA, Validation, Mail SMTP.
+  \item \textbf{Frontend} : React 19, Vite.
+  \item \textbf{BDD} : H2 (fichier local) et base MySQL prete.
+  \item \textbf{Deploiement} : Render (API Docker + Frontend statique).
+\end{itemize}
+
+\subsection{Organisation du code}
+\begin{itemize}
+  \item \texttt{backend/} : modeles, DTO, repositories, services, controllers.
+  \item \texttt{frontend/} : pages, composants, etat UI, appels REST.
+  \item racine : \texttt{pom.xml}, \texttt{Dockerfile}, \texttt{render.yaml}, \texttt{README.md}.
+\end{itemize}
+
+\subsection{Routes REST principales}
+\begin{itemize}
+  \item \texttt{/api/info/*}
+  \item \texttt{/api/auth/*}
+  \item \texttt{/api/visualisation/*}
+  \item \texttt{/api/gestion/*}
+  \item \texttt{/api/admin/*}
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Methodologie projet}
+
+Le travail a ete mene de maniere iterative (inspire SCRUM) :
+\begin{itemize}
+  \item priorisation du backlog et progression par increments,
+  \item cycles courts implementation + verification,
+  \item demonstrations regulieres des fonctions importantes,
+  \item stabilisation finale pour soutenance.
+\end{itemize}
+
+\subsection{Repartition des contributions}
+
+\begin{longtable}{|p{3.2cm}|p{4.2cm}|p{7.2cm}|}
+\hline
+\textbf{Membre} & \textbf{Role principal} & \textbf{Contributions} \\
+\hline
+Khayem Ben Ghorbel & Pilotage technique & Architecture globale, integration front/back, securite auth, stabilisation demo \\
+\hline
+Rindra & Implementation fonctionnelle & Support modules Information/Visualisation, validations de parcours \\
+\hline
+Ziyad & Support backend & Verifications API, aides sur robustesse modele/controleurs \\
+\hline
+Anastasia & UX / presentation & Qualite visuelle des ecrans, coherence navigation et lisibilite \\
+\hline
+Valerie & Documentation / soutenance & Structuration rapport, support scenario de demonstration \\
+\hline
+\end{longtable}
+
+% ------------------------------------------------------------
+\section{Couverture fonctionnelle}
+
+\subsection{Module Information}
+\begin{itemize}
+  \item affichage des pieces et objets,
+  \item recherche avec filtres combines,
+  \item acces sans connexion.
+\end{itemize}
+
+\subsection{Module Visualisation}
+\begin{itemize}
+  \item inscription / connexion / profil,
+  \item consultation des objets et des services,
+  \item progression utilisateur (points + niveau).
+\end{itemize}
+
+\subsection{Module Gestion}
+\begin{itemize}
+  \item CRUD objets connectes,
+  \item commandes specialisees par type (machine cafe, aspirateur, etc.),
+  \item scenarios domotiques,
+  \item maintenance priorisee (CRITICAL/HIGH/MEDIUM),
+  \item historique et statistiques.
+\end{itemize}
+
+\subsection{Module Administration}
+\begin{itemize}
+  \item gestion des utilisateurs,
+  \item attribution/retrait du role admin,
+  \item validation/suspension des comptes,
+  \item traitement des demandes de suppression.
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Securite et controle d'acces}
+
+Le flux de securite applique est le suivant :
+\begin{enumerate}
+  \item inscription,
+  \item verification email par code (envoi SMTP reel),
+  \item validation manuelle par administrateur,
+  \item connexion autorisee uniquement apres ces etapes.
+\end{enumerate}
+
+Un compte non approuve est bloque au login (retour HTTP 403).
+Cette approche reduit les inscriptions sauvages et donne un controle operateur
+sur les nouveaux comptes.
+
+Les acces aux modules sont verifies cote backend :
+\begin{itemize}
+  \item module Gestion reserve aux utilisateurs de niveau \texttt{AVANCE},
+  \item module Administration reserve aux comptes \texttt{admin=true}.
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Schema UML complet (grande vue)}
+
+Le schema UML ci-dessous presente l'ensemble des entites metier, leurs heritages,
+leurs compositions et les liens majeurs entre modules.
+
+\begin{landscape}
+\begin{figure}[p]
+\centering
+\resizebox{1.25\textwidth}{!}{%
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=8mm and 10mm,
+  classbox/.style={draw, rounded corners, align=center, font=\scriptsize, text width=4.1cm, minimum height=11mm},
+  link/.style={-Latex, line width=0.5pt}
+]
+
+% Core house
+\node[classbox] (maison) {\textbf{Maison}\\id, nom};
+\node[classbox, below=of maison] (piece) {\textbf{Piece}\\id, nom, surface, type};
+\node[classbox, right=34mm of piece] (objet) {\textbf{ObjetConnecte} (abstrait)\\id, nom, etat, connectivite\\batterie, derniereMaintenance};
+
+% Object branches
+\node[classbox, above right=of objet] (capteur) {\textbf{Capteur}};
+\node[classbox, right=of objet] (appareil) {\textbf{Appareil}};
+\node[classbox, below right=of objet] (ouvrant) {\textbf{Ouvrant}};
+\node[classbox, below=of appareil] (animal) {\textbf{BesoinAnimal}};
+
+\node[classbox, right=34mm of capteur] (capteurTypes) {Camera\\Thermostat\\DetecteurMouvement};
+\node[classbox, right=34mm of appareil] (appareilTypes) {Aspirateur\\LaveLinge\\MachineCafe\\Alarme\\Climatiseur\\Television...};
+\node[classbox, right=34mm of ouvrant] (ouvrantTypes) {Porte\\Fenetre\\Volet\\PorteGarage};
+\node[classbox, right=34mm of animal] (animalTypes) {Eau\\Nourriture};
+
+% Users
+\node[classbox, below=25mm of piece] (utilisateur) {\textbf{Utilisateur} (abstrait)\\id, email, points, niveau\\admin, emailVerifie, compteApprouve};
+\node[classbox, right=of utilisateur] (roles) {ParentFamille\\Enfant\\VoisinVisiteur};
+
+% Admin / trace / automation
+\node[classbox, below=of utilisateur] (historique) {\textbf{HistoriqueAction}\\id, actionType, timestamp};
+\node[classbox, right=of historique] (demande) {\textbf{DemandeSuppression}\\id, status, motif, createdAt};
+\node[classbox, right=of demande] (scenario) {\textbf{Scenario}\\id, type, enabled, cron};
+\node[classbox, above=of scenario] (scenarioAction) {\textbf{ScenarioAction}\\targetEtat, targetPosition};
+\node[classbox, below=of scenario] (donneeCapteur) {\textbf{DonneeCapteur}\\valeur, unite, timestamp};
+
+% Links
+\draw[link] (maison) -- node[left,font=\tiny]{1..N} (piece);
+\draw[link] (piece) -- node[above,font=\tiny]{1..N} (objet);
+
+\draw[link] (objet) -- (capteur);
+\draw[link] (objet) -- (appareil);
+\draw[link] (objet) -- (ouvrant);
+\draw[link] (objet) -- (animal);
+
+\draw[link] (capteur) -- (capteurTypes);
+\draw[link] (appareil) -- (appareilTypes);
+\draw[link] (ouvrant) -- (ouvrantTypes);
+\draw[link] (animal) -- (animalTypes);
+
+\draw[link] (utilisateur) -- (roles);
+\draw[link] (utilisateur) -- node[left,font=\tiny]{1..N} (historique);
+\draw[link] (objet) |- node[pos=0.85,right,font=\tiny]{1..N} (historique.east);
+\draw[link] (utilisateur) -- node[above,font=\tiny]{1..N} (demande);
+\draw[link] (objet) -- node[right,font=\tiny]{0..N} (donneeCapteur);
+\draw[link] (scenario) -- node[right,font=\tiny]{1..N} (scenarioAction);
+\draw[link] (objet) |- node[pos=0.82,above,font=\tiny]{cible} (scenarioAction.west);
+\end{tikzpicture}%
+}
+\caption{Schema UML global (vue complete et agrandie).}
+\end{figure}
+\end{landscape}
+
+\clearpage
+
+% ------------------------------------------------------------
+\section{Schema de base de donnees complet (grande vue relationnelle)}
+
+La base de donnees est organisee autour des tables coeur \texttt{utilisateur}, \texttt{objet\_connecte},
+\texttt{piece}, et des tables de liaison/fonctionnement (historique, scenarios, demandes, donnees capteurs).
+
+\begin{landscape}
+\begin{figure}[p]
+\centering
+\resizebox{1.25\textwidth}{!}{%
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=8mm and 10mm,
+  dbbox/.style={draw, rounded corners, align=left, font=\scriptsize, text width=4.8cm, inner sep=4pt},
+  fk/.style={-Latex, line width=0.5pt}
+]
+
+\node[dbbox] (maison) {\textbf{maison}\\PK id\\nom};
+\node[dbbox, below=of maison] (piece) {\textbf{piece}\\PK id\\FK maison\_id\\nom, surface, type};
+
+\node[dbbox, right=of piece] (objet) {\textbf{objet\_connecte}\\PK id\\FK piece\_id\\type\_objet\\etat, connectivite, batterie\\derniere\_maintenance\\colonnes specialisees};
+
+\node[dbbox, above=of objet] (utilisateur) {\textbf{utilisateur}\\PK id\\email (UNIQUE), mot\_de\_passe\\type\_membre, points\\email\_verifie, compte\_approuve, admin};
+
+\node[dbbox, right=of objet] (historique) {\textbf{historique\_action}\\PK id\\FK utilisateur\_id\\FK objet\_id\\action\_type, timestamp};
+\node[dbbox, below=of objet] (scenario) {\textbf{scenario}\\PK id\\type, enabled, cron\\trigger\_event, trigger\_objet\_id};
+\node[dbbox, right=of scenario] (scenarioAction) {\textbf{scenario\_action}\\PK id\\FK scenario\_id\\FK objet\_id\\target\_etat, target\_position};
+\node[dbbox, below=of utilisateur] (demande) {\textbf{demande\_suppression}\\PK id\\FK demandeur\_id\\FK objet\_id (nullable)\\status, motif, created\_at, resolved\_at};
+\node[dbbox, below=of piece] (donnee) {\textbf{donnee\_capteur}\\PK id\\FK objet\_id\\valeur, unite, timestamp};
+
+\draw[fk] (maison) -- (piece);
+\draw[fk] (piece) -- (objet);
+\draw[fk] (utilisateur) -- (historique);
+\draw[fk] (objet) -- (historique);
+\draw[fk] (utilisateur) -- (demande);
+\draw[fk] (objet) -- (demande);
+\draw[fk] (scenario) -- (scenarioAction);
+\draw[fk] (objet) -- (scenarioAction);
+\draw[fk] (objet) -- (donnee);
+\end{tikzpicture}%
+}
+\caption{Schema relationnel principal (PK/FK) de la base.}
+\end{figure}
+\end{landscape}
+
+\clearpage
+
+\subsection{Choix de modelisation et performances}
+\begin{itemize}
+  \item Heritage JPA en \texttt{SINGLE\_TABLE} pour \texttt{utilisateur} et \texttt{objet\_connecte}.
+  \item Integrite referentielle via FK sur les tables de traces et d'automatisation.
+  \item Requetes cibles a indexer :
+  \begin{itemize}
+    \item \texttt{objet\_connecte(type\_objet, piece\_id, etat)}
+    \item \texttt{historique\_action(utilisateur\_id, objet\_id, timestamp)}
+    \item \texttt{scenario(enabled, type, trigger\_event)}
+  \end{itemize}
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Tests et validation}
+
+\subsection{Builds}
+\begin{itemize}
+  \item Backend : \texttt{mvn -DskipTests compile} -> succes.
+  \item Frontend : \texttt{npm.cmd run build} -> succes.
+\end{itemize}
+
+\subsection{Tests de parcours demo}
+\begin{enumerate}
+  \item verification endpoint \texttt{/api/health},
+  \item inscription utilisateur,
+  \item verification email par code,
+  \item blocage login tant que validation admin absente,
+  \item validation admin puis connexion autorisee,
+  \item execution scenario et actions de maintenance.
+\end{enumerate}
+
+\subsection{Responsive et UX}
+\begin{itemize}
+  \item rendu teste en desktop/tablette/mobile,
+  \item feedback utilisateur par toasts et etats explicites,
+  \item sections sensibles masquee/verrouillees selon droits.
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Deploiement}
+
+\begin{itemize}
+  \item API Render : service Docker, healthcheck \texttt{/api/health}
+  \item Frontend Render : service statique Vite
+  \item URL racine API (\texttt{/}) en 404 : comportement normal d'une API-only
+\end{itemize}
+
+% ------------------------------------------------------------
+\section{Difficultes rencontrees et solutions}
+
+\begin{enumerate}
+  \item \textbf{Evolution du schema local H2} :
+  gestion des colonnes legacy et compatibilite lors des evolutions modeles.
+
+  \item \textbf{Synchronisation etat front/back} :
+  mise a jour locale immediate de l'UI apres reponse API pour eviter la latence percue.
+
+  \item \textbf{Securisation des inscriptions} :
+  ajout verification email reelle + validation admin obligatoire avant login.
+\end{enumerate}
+
+% ------------------------------------------------------------
+\section{Conclusion}
+
+Le projet livre une plateforme complete, structuree et demonstrable,
+avec separation claire des modules, modelisation metier riche,
+automatisation domotique, et securite renforcee.
+
+Les axes d'amelioration prioritaires pour une suite industrielle sont :
+\begin{itemize}
+  \item migration full MySQL + scripts de migration formels,
+  \item tests automatises E2E,
+  \item observabilite (metriques, logs structures, alerting).
+\end{itemize}
+
+\section*{Annexe -- Commandes utiles}
+
+\begin{Verbatim}[fontsize=\small]
+# Backend
+mvn spring-boot:run
+
+# Frontend
+cd frontend
+npm.cmd run dev
+
+# Build
+mvn -DskipTests compile
+cd frontend && npm.cmd run build
+\end{Verbatim}
+
+\end{document}
