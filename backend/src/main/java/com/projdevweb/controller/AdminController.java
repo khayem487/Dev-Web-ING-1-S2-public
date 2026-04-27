@@ -1,6 +1,7 @@
 package com.projdevweb.controller;
 
 import com.projdevweb.dto.AdminDecisionRequest;
+import com.projdevweb.dto.AdminUserApprovalRequest;
 import com.projdevweb.dto.AdminUserToggleRequest;
 import com.projdevweb.dto.DemandeSuppressionDTO;
 import com.projdevweb.dto.UserProfileDTO;
@@ -102,6 +103,33 @@ public class AdminController {
 
         pointsService.record(admin, ActionType.ADMIN_DECISION, null,
                 "Admin role " + (saved.isAdmin() ? "granted" : "revoked") + " for " + saved.getEmail());
+
+        return UserProfileDTO.from(saved);
+    }
+
+    @PatchMapping("/utilisateurs/{id}/approval")
+    public UserProfileDTO toggleApproval(@PathVariable Long id,
+                                         @RequestBody AdminUserApprovalRequest request,
+                                         HttpSession session) {
+        Utilisateur admin = sessionUtilisateurService.requireAdmin(session);
+        Utilisateur cible = utilisateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable: " + id));
+
+        boolean approved = Boolean.TRUE.equals(request != null ? request.approved() : null);
+        if (approved == cible.isCompteApprouve()) {
+            return UserProfileDTO.from(cible);
+        }
+
+        if (admin.getId().equals(cible.getId()) && !approved) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Impossible de suspendre votre propre compte");
+        }
+
+        cible.setCompteApprouve(approved);
+        Utilisateur saved = utilisateurRepository.save(cible);
+
+        pointsService.record(admin, ActionType.ADMIN_DECISION, null,
+                "Account approval " + (approved ? "granted" : "revoked") + " for " + saved.getEmail());
 
         return UserProfileDTO.from(saved);
     }

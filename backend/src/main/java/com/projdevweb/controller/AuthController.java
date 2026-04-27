@@ -38,6 +38,7 @@ import java.util.Map;
 public class AuthController {
 
     private static final SecureRandom RNG = new SecureRandom();
+    private static final String APPROVAL_REQUIRED_MSG = "Compte en attente de validation administrateur.";
 
     private final UtilisateurRepository utilisateurRepository;
     private final SessionUtilisateurService sessionUtilisateurService;
@@ -78,9 +79,10 @@ public class AuthController {
                 emailNorm,
                 hash);
 
-        boolean verificationRequired = emailVerificationEnabled && !emailNorm.endsWith("@demo.local");
+        boolean verificationRequired = emailVerificationEnabled;
         if (verificationRequired) {
             utilisateur.setEmailVerifie(false);
+            utilisateur.setCompteApprouve(false);
             utilisateur.setEmailVerificationToken(generateVerificationToken());
             utilisateur.setEmailVerificationExpireAt(Instant.now().plusSeconds(24 * 3600));
             Utilisateur saved = utilisateurRepository.save(utilisateur);
@@ -98,6 +100,7 @@ public class AuthController {
         }
 
         utilisateur.setEmailVerifie(true);
+        utilisateur.setCompteApprouve(true);
         utilisateur.setEmailVerificationToken(null);
         utilisateur.setEmailVerificationExpireAt(null);
 
@@ -121,6 +124,10 @@ public class AuthController {
                     "Email non vérifié. Valide le code de vérification avant connexion.");
         }
 
+        if (!utilisateur.isCompteApprouve()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, APPROVAL_REQUIRED_MSG);
+        }
+
         Utilisateur withLogin = pointsService.recordLogin(utilisateur);
         sessionUtilisateurService.login(session, withLogin);
         return UserProfileDTO.from(withLogin);
@@ -134,6 +141,9 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compte introuvable"));
 
         if (utilisateur.isEmailVerifie()) {
+            if (!utilisateur.isCompteApprouve()) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, APPROVAL_REQUIRED_MSG);
+            }
             Utilisateur withLogin = pointsService.recordLogin(utilisateur);
             sessionUtilisateurService.login(session, withLogin);
             return UserProfileDTO.from(withLogin);
@@ -151,6 +161,11 @@ public class AuthController {
         utilisateur.setEmailVerificationExpireAt(null);
 
         Utilisateur saved = utilisateurRepository.save(utilisateur);
+        if (!saved.isCompteApprouve()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Email vérifié. " + APPROVAL_REQUIRED_MSG);
+        }
+
         Utilisateur withLogin = pointsService.recordLogin(saved);
         sessionUtilisateurService.login(session, withLogin);
         return UserProfileDTO.from(withLogin);

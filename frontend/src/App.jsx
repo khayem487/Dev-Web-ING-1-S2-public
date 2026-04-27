@@ -169,6 +169,7 @@ function toUiUser(user) {
     photo: initials,
     photoDataUrl: user.photoDataUrl || null,
     admin: Boolean(user.admin || user.isAdmin),
+    compteApprouve: Boolean(user.compteApprouve ?? user.accountApproved ?? true),
     typeMembre: normalizeEnumLabel(user.typeMembre) || user.typeMembre,
     niveau: normalizeEnumLabel(user.niveau) || user.niveau,
     niveauMax: normalizeEnumLabel(user.niveauMax) || user.niveauMax,
@@ -2921,11 +2922,17 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
   const runLogin = async (email, motDePasse) => {
     setLoading(true)
     setError('')
+    setVerifyMsg('')
     try {
       await onLogin({ email, motDePasse })
     } catch (e) {
       const message = e.message || 'Connexion impossible'
-      setError(message)
+      if (message.toLowerCase().includes('en attente de validation administrateur')) {
+        setError('')
+        setVerifyMsg('Compte vérifié, en attente de validation admin.')
+      } else {
+        setError(message)
+      }
       if (message.toLowerCase().includes('email non vérifié') || message.toLowerCase().includes('non vérifi')) {
         setTab('verify')
         setVerifyForm((f) => ({ ...f, email }))
@@ -2962,7 +2969,12 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
       await onVerifyEmail(verifyForm)
       setVerifyMsg('Email vérifié ✅ Connexion active.')
     } catch (e) {
-      setError(e.message || 'Vérification impossible')
+      const message = e.message || 'Vérification impossible'
+      if (message.toLowerCase().includes('en attente de validation administrateur')) {
+        setVerifyMsg('Email vérifié ✅ Compte en attente de validation admin.')
+      } else {
+        setError(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -4143,6 +4155,11 @@ function AdminPage({ user, t, onChanged }) {
     }).length
   }, [users])
 
+  const pendingApprovalCount = useMemo(
+    () => users.filter((u) => !u.compteApprouve).length,
+    [users]
+  )
+
   const fmtDate = (ts) => {
     if (!ts) return '-'
     const d = new Date(ts)
@@ -4171,6 +4188,18 @@ function AdminPage({ user, t, onChanged }) {
       await fetchJson(`/api/admin/utilisateurs/${target.id}/admin`, {
         method: 'PATCH',
         body: JSON.stringify({ admin: !target.admin })
+      })
+      await load()
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  const toggleApproval = async (target) => {
+    try {
+      await fetchJson(`/api/admin/utilisateurs/${target.id}/approval`, {
+        method: 'PATCH',
+        body: JSON.stringify({ approved: !target.compteApprouve })
       })
       await load()
     } catch (e) {
@@ -4238,7 +4267,7 @@ function AdminPage({ user, t, onChanged }) {
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(120px, 1fr))', gap:8 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(120px, 1fr))', gap:8 }}>
           <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
             <div className="label">Utilisateurs</div>
             <div className="display" style={{ fontSize:20 }}>{users.length}</div>
@@ -4250,6 +4279,10 @@ function AdminPage({ user, t, onChanged }) {
           <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
             <div className="label">Demandes pending</div>
             <div className="display" style={{ fontSize:20 }}>{pendingCount}</div>
+          </div>
+          <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
+            <div className="label">Comptes à valider</div>
+            <div className="display" style={{ fontSize:20 }}>{pendingApprovalCount}</div>
           </div>
           <div style={{ border:'1px solid var(--line)', borderRadius:10, padding:'10px 12px', background:'var(--bg-2)' }}>
             <div className="label">Inscrits 7j</div>
@@ -4300,8 +4333,23 @@ function AdminPage({ user, t, onChanged }) {
               <div>
                 <div style={{ fontSize:13, color:'var(--text)' }}>{u.prenom} {u.nom} · {u.email}</div>
                 <div style={{ fontSize:11, color:'var(--text-3)' }}>{u.typeMembre} · {u.niveau}</div>
+                <div style={{ fontSize:11, color:'var(--text-3)', marginTop:3 }}>
+                  <span style={{ marginRight:8 }}>Email: {u.emailVerifie ? 'Vérifié' : 'Non vérifié'}</span>
+                  <span style={{ color: u.compteApprouve ? 'var(--green)' : t.accent }}>
+                    {u.compteApprouve ? 'Compte approuvé' : 'Compte en attente'}
+                  </span>
+                </div>
               </div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => toggleApproval(u)}
+                  disabled={u.id === user?.id && u.compteApprouve}
+                  style={{ ...(u.compteApprouve ? ctaSec : ctaPri), background: u.compteApprouve ? undefined : 'var(--green)' }}
+                  title={u.id === user?.id && u.compteApprouve ? 'Auto-suspension désactivée' : 'Valider / suspendre le compte'}
+                >
+                  {u.compteApprouve ? 'Suspendre compte' : 'Valider compte'}
+                </button>
                 <button type="button" onClick={() => toggleAdmin(u)} style={{ ...(u.admin ? ctaSec : ctaPri), background: u.admin ? undefined : t.accent }}>
                   {u.admin ? 'Retirer admin' : 'Passer admin'}
                 </button>

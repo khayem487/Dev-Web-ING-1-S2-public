@@ -71,6 +71,10 @@ public abstract class Utilisateur {
     @Column(nullable = false)
     private Boolean emailVerifie = true;
 
+    /** Validation manuelle du compte par un administrateur. */
+    @Column
+    private Boolean compteApprouve = true;
+
     @Column(length = 32)
     private String emailVerificationToken;
 
@@ -266,6 +270,15 @@ public abstract class Utilisateur {
 
     public void setEmailVerificationExpireAt(Instant emailVerificationExpireAt) {
         this.emailVerificationExpireAt = emailVerificationExpireAt;
+    }
+
+    public boolean isCompteApprouve() {
+        // Backward-compatible: legacy rows may have NULL after schema evolution.
+        return compteApprouve == null || Boolean.TRUE.equals(compteApprouve);
+    }
+
+    public void setCompteApprouve(Boolean compteApprouve) {
+        this.compteApprouve = Boolean.TRUE.equals(compteApprouve);
     }
 
     public Float getPoints() {
