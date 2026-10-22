@@ -2716,7 +2716,7 @@ function ProfileEditorModal({ open, user, onClose, onUpdated, accent = 'var(--ac
 }
 
 /* ─── LOGIN / VISUALISATION ─────────────── */
-function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onVerifyEmail, onResendVerification, onLogout, onSessionRefresh, openDetail, t }) {
+function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onVerifyEmail, onResendVerification, onLogout, onSessionRefresh, openDetail, t, health }) {
   const [filters, setFilters] = useState({ service:'', etat:'', pieceId:'', q:'' });
   const [profile, setProfile] = useState(user);
   const [services, setServices] = useState([]);
@@ -2778,6 +2778,7 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
   if (!user) {
     return (
       <LoginScreen
+        registrationEnabled={health?.data?.registrationEnabled !== false}
         onLogin={onLogin}
         onRegister={onRegister}
         onVerifyEmail={onVerifyEmail}
@@ -2910,7 +2911,7 @@ function VisualisationPage({ user, pieces, refreshTick, onLogin, onRegister, onV
   );
 }
 
-function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification, t }) {
+function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification, t, registrationEnabled = true }) {
   const [tab, setTab] = useState('login');
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -3029,11 +3030,11 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
 
       <div style={{ borderRadius:18, padding:'32px', background:'var(--surface)', border:'1px solid var(--line)' }}>
         <div style={{ display:'flex', gap:4, padding:4, background:'var(--bg-2)', borderRadius:10, marginBottom:24 }}>
-          {[
+          {(registrationEnabled ? [
             { key:'login', label:'Connexion' },
             { key:'register', label:'Inscription' },
             { key:'verify', label:'Vérifier' }
-          ].map(({ key, label }) => (
+          ] : [{ key:'login', label:'Comptes de démonstration' }]).map(({ key, label }) => (
             <button key={key} onClick={()=>setTab(key)} style={{
               flex:1, padding:'9px', borderRadius:8, fontSize:13, fontWeight:500,
               background: tab===key ? 'var(--surface)' : 'transparent',
@@ -3042,6 +3043,8 @@ function LoginScreen({ onLogin, onRegister, onVerifyEmail, onResendVerification,
             }}>{label}</button>
           ))}
         </div>
+
+        {!registrationEnabled && <p style={{ fontSize:13, lineHeight:1.7, color:'var(--text-2)', marginBottom:20 }}>Choisis un profil fictif pour explorer les droits et les objets de la maison. Aucun email n'est envoyé depuis cette démonstration.</p>}
 
         {tab==='login' ? (
           <form onSubmit={(e)=>{ e.preventDefault(); runLogin(loginForm.email, loginForm.motDePasse) }}>
@@ -4873,7 +4876,8 @@ function App() {
               <button
                 type="button"
                 onClick={() => setProfileEditorOpen(true)}
-                aria-label="Ouvrir mon profil"
+                disabled={health.data?.demo}
+                aria-label={health.data?.demo ? 'Profil de démonstration protégé' : 'Ouvrir mon profil'}
                 style={{
                   flex:1,
                   display:'flex',
@@ -4889,7 +4893,7 @@ function App() {
                 <div aria-hidden="true"><AvatarBadge user={user} size={32} accent={t.accent} /></div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:500, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{user.prenom}</div>
-                  <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts · cliquer pour profil</div>
+                  <div className="mono" style={{ fontSize:10, color:'var(--text-3)' }}>{user.points.toFixed(2)} pts · {health.data?.demo ? 'profil partagé protégé' : 'cliquer pour profil'}</div>
                 </div>
               </button>
               <button type="button" onClick={handleLogout} aria-label="Se déconnecter" style={iconBtn}><Icon name="power" size={12}/></button>
@@ -4909,6 +4913,11 @@ function App() {
       </aside>
 
       <main id="main-content" style={{ padding:'40px 48px 80px', maxWidth: 1320, width:'100%' }}>
+        {health.data?.demo && <aside aria-label="Fonctionnement de la démonstration" style={{ marginBottom:24, padding:'14px 18px', borderRadius:12, border:'1px solid var(--line-2)', background:'var(--surface)', color:'var(--text-2)', fontSize:12, lineHeight:1.7 }}>
+          <strong style={{ color:'var(--text)' }}>Maison de démonstration · objets et comptes fictifs.</strong>{' '}Les profils et droits des comptes partagés sont protégés.{' '}
+          {health.data.storage === 'ephemeral-demo' ? 'Les données sont temporaires et se réinitialisent au redémarrage ; une reconnexion peut être nécessaire.' : 'Les données sont enregistrées dans une base externe ; une reconnexion peut être nécessaire après redémarrage.'}{' '}
+          {!health.data.schedulerEnabled && 'Les scénarios se lancent manuellement ; la programmation automatique continue est désactivée.'}
+        </aside>}
         {renderPage()}
       </main>
 

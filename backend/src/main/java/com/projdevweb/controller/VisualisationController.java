@@ -9,6 +9,7 @@ import com.projdevweb.model.Utilisateur;
 import com.projdevweb.repository.ObjetConnecteRepository;
 import com.projdevweb.service.PointsService;
 import com.projdevweb.service.SessionUtilisateurService;
+import com.projdevweb.service.DemoAccountPolicy;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,13 +38,16 @@ public class VisualisationController {
     private final ObjetConnecteRepository objetConnecteRepository;
     private final SessionUtilisateurService sessionUtilisateurService;
     private final PointsService pointsService;
+    private final DemoAccountPolicy demoAccountPolicy;
 
     public VisualisationController(ObjetConnecteRepository objetConnecteRepository,
                                    SessionUtilisateurService sessionUtilisateurService,
-                                   PointsService pointsService) {
+                                   PointsService pointsService,
+                                   DemoAccountPolicy demoAccountPolicy) {
         this.objetConnecteRepository = objetConnecteRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
         this.pointsService = pointsService;
+        this.demoAccountPolicy = demoAccountPolicy;
     }
 
     @GetMapping("/profile")
@@ -59,6 +63,7 @@ public class VisualisationController {
     public UserProfileDTO updateProfile(@Valid @RequestBody UserProfileUpdateRequest request,
                                         HttpSession session) {
         Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        demoAccountPolicy.requireEditable(utilisateur);
 
         utilisateur.setPseudo(trimToNull(request.pseudo()));
         utilisateur.setBioPublique(trimToNull(request.bioPublique()));
@@ -76,6 +81,7 @@ public class VisualisationController {
     public UserProfileDTO uploadPhoto(@RequestPart("file") MultipartFile file,
                                       HttpSession session) {
         Utilisateur utilisateur = sessionUtilisateurService.requireUser(session);
+        demoAccountPolicy.requireEditable(utilisateur);
 
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fichier image requis");

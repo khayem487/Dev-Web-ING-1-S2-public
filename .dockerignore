@@ -1,0 +1,12 @@
+.git
+.vercel
+.env*
+**/.env*
+target
+frontend/node_modules
+frontend/dist
+data
+*.log
+docs
+.idea
+.vscode

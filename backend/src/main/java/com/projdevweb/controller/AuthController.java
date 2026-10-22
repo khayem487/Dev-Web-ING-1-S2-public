@@ -47,6 +47,7 @@ public class AuthController {
     private final VerificationEmailService verificationEmailService;
     private final boolean emailVerificationEnabled;
     private final boolean exposeDebugVerificationToken;
+    private final boolean registrationEnabled;
 
     public AuthController(UtilisateurRepository utilisateurRepository,
                           SessionUtilisateurService sessionUtilisateurService,
@@ -54,7 +55,8 @@ public class AuthController {
                           PointsService pointsService,
                           VerificationEmailService verificationEmailService,
                           @Value("${app.auth.email-verification-enabled:true}") boolean emailVerificationEnabled,
-                          @Value("${app.auth.email-verification-debug-token-enabled:false}") boolean exposeDebugVerificationToken) {
+                          @Value("${app.auth.email-verification-debug-token-enabled:false}") boolean exposeDebugVerificationToken,
+                          @Value("${app.auth.registration-enabled:true}") boolean registrationEnabled) {
         this.utilisateurRepository = utilisateurRepository;
         this.sessionUtilisateurService = sessionUtilisateurService;
         this.passwordService = passwordService;
@@ -62,10 +64,12 @@ public class AuthController {
         this.verificationEmailService = verificationEmailService;
         this.emailVerificationEnabled = emailVerificationEnabled;
         this.exposeDebugVerificationToken = exposeDebugVerificationToken;
+        this.registrationEnabled = registrationEnabled;
     }
 
     @PostMapping("/register")
     public AuthRegisterResponse register(@Valid @RequestBody AuthRegisterRequest request, HttpSession session) {
+        requireRegistrationEnabled();
         String emailNorm = request.email().trim().toLowerCase(Locale.ROOT);
         if (utilisateurRepository.existsByEmailIgnoreCase(emailNorm)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Un compte avec cet email existe déjà");
@@ -136,6 +140,7 @@ public class AuthController {
     @PostMapping("/verify-email")
     public UserProfileDTO verifyEmail(@Valid @RequestBody AuthVerifyEmailRequest request,
                                       HttpSession session) {
+        requireRegistrationEnabled();
         String emailNorm = request.email().trim().toLowerCase(Locale.ROOT);
         Utilisateur utilisateur = utilisateurRepository.findByEmailIgnoreCase(emailNorm)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compte introuvable"));
@@ -173,6 +178,7 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
     public Map<String, Object> resendVerification(@Valid @RequestBody AuthResendVerificationRequest request) {
+        requireRegistrationEnabled();
         String emailNorm = request.email().trim().toLowerCase(Locale.ROOT);
         Utilisateur utilisateur = utilisateurRepository.findByEmailIgnoreCase(emailNorm)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compte introuvable"));
@@ -216,6 +222,13 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Non connecté");
         }
         return UserProfileDTO.from(utilisateur);
+    }
+
+    private void requireRegistrationEnabled() {
+        if (!registrationEnabled) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Cette démonstration utilise les comptes fictifs proposés. L'inscription et l'envoi d'email ne sont pas activés.");
+        }
     }
 
     private static TypeMembre parseTypeMembre(String value) {

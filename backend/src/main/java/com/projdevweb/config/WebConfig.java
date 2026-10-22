@@ -22,6 +22,11 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // No cross-origin policy in the single-domain public deployment.
+        // Omitting the mapping avoids Spring's default wildcard + credentials.
+        if (allowedOriginPatterns.isEmpty()) {
+            return;
+        }
         registry.addMapping("/api/**")
                 .allowedOriginPatterns(allowedOriginPatterns.toArray(String[]::new))
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")

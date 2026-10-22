@@ -18,6 +18,7 @@ import com.projdevweb.repository.ScenarioActionRepository;
 import com.projdevweb.repository.UtilisateurRepository;
 import com.projdevweb.service.PointsService;
 import com.projdevweb.service.SessionUtilisateurService;
+import com.projdevweb.service.DemoAccountPolicy;
 import jakarta.servlet.http.HttpSession;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -49,6 +50,7 @@ public class AdminController {
     private final DonneeCapteurRepository donneeCapteurRepository;
     private final ScenarioActionRepository scenarioActionRepository;
     private final PointsService pointsService;
+    private final DemoAccountPolicy demoAccountPolicy;
 
     public AdminController(SessionUtilisateurService sessionUtilisateurService,
                            UtilisateurRepository utilisateurRepository,
@@ -57,7 +59,8 @@ public class AdminController {
                            HistoriqueActionRepository historiqueActionRepository,
                            DonneeCapteurRepository donneeCapteurRepository,
                            ScenarioActionRepository scenarioActionRepository,
-                           PointsService pointsService) {
+                           PointsService pointsService,
+                           DemoAccountPolicy demoAccountPolicy) {
         this.sessionUtilisateurService = sessionUtilisateurService;
         this.utilisateurRepository = utilisateurRepository;
         this.demandeSuppressionRepository = demandeSuppressionRepository;
@@ -66,6 +69,7 @@ public class AdminController {
         this.donneeCapteurRepository = donneeCapteurRepository;
         this.scenarioActionRepository = scenarioActionRepository;
         this.pointsService = pointsService;
+        this.demoAccountPolicy = demoAccountPolicy;
     }
 
     @GetMapping("/utilisateurs")
@@ -81,6 +85,7 @@ public class AdminController {
         Utilisateur admin = sessionUtilisateurService.requireAdmin(session);
         Utilisateur cible = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable: " + id));
+        demoAccountPolicy.requireEditable(cible);
 
         if (Boolean.TRUE.equals(request.admin()) == cible.isAdmin()) {
             return UserProfileDTO.from(cible);
@@ -114,6 +119,7 @@ public class AdminController {
         Utilisateur admin = sessionUtilisateurService.requireAdmin(session);
         Utilisateur cible = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable: " + id));
+        demoAccountPolicy.requireEditable(cible);
 
         boolean approved = Boolean.TRUE.equals(request != null ? request.approved() : null);
         if (approved == cible.isCompteApprouve()) {
@@ -141,6 +147,7 @@ public class AdminController {
         Utilisateur admin = sessionUtilisateurService.requireAdmin(session);
         Utilisateur cible = utilisateurRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable: " + id));
+        demoAccountPolicy.requireEditable(cible);
 
         if (admin.getId().equals(cible.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Impossible de supprimer votre propre compte admin");

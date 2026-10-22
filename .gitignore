@@ -42,8 +42,11 @@ frontend/.vite/
 ### Env files ###
 .env
 .env.local
+.env.*
+.vercel/
 **/.env
 **/.env.local
+**/.env.*
 !**/.env.example
 
 ### Local/private notes ###
@@ -60,3 +63,5 @@ data/
 *.log
 local-backend.*.log
 local-frontend.*.log
+.vercel
+.env*
