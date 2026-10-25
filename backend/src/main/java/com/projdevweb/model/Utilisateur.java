@@ -9,7 +9,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
-import jakarta.persistence.Lob;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
@@ -80,8 +81,9 @@ public abstract class Utilisateur {
 
     private Instant emailVerificationExpireAt;
 
-    @Lob
-    @Column
+    // PostgreSQL TEXT, not an OID large object requiring connection-local LOB access.
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = org.hibernate.Length.LONG32)
     private String photoDataUrl;
 
     /** Points cumulés (Float pour autoriser les +0.25/+0.50). */

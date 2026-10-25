@@ -54,6 +54,9 @@ import com.projdevweb.repository.UtilisateurRepository;
 import com.projdevweb.service.PasswordService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -90,6 +93,8 @@ public class DataSeeder implements CommandLineRunner {
     private final HistoriqueActionRepository historiqueActionRepository;
     private final ScenarioRepository scenarioRepository;
     private final PasswordService passwordService;
+    private final JdbcTemplate jdbc;
+    private final boolean seedOnce;
 
     public DataSeeder(MaisonRepository maisonRepository,
                       PieceRepository pieceRepository,
@@ -98,7 +103,9 @@ public class DataSeeder implements CommandLineRunner {
                       DonneeCapteurRepository donneeCapteurRepository,
                       HistoriqueActionRepository historiqueActionRepository,
                       ScenarioRepository scenarioRepository,
-                      PasswordService passwordService) {
+                      PasswordService passwordService,
+                      JdbcTemplate jdbc,
+                      @Value("${app.persistence.seed-once:false}") boolean seedOnce) {
         this.maisonRepository = maisonRepository;
         this.pieceRepository = pieceRepository;
         this.objetConnecteRepository = objetConnecteRepository;
@@ -107,16 +114,27 @@ public class DataSeeder implements CommandLineRunner {
         this.historiqueActionRepository = historiqueActionRepository;
         this.scenarioRepository = scenarioRepository;
         this.passwordService = passwordService;
+        this.jdbc = jdbc;
+        this.seedOnce = seedOnce;
     }
 
     @Override
+    @Transactional
     public void run(String... args) {
+        if (seedOnce) {
+            // A transaction lock serializes cold starts, including through a transaction pool.
+            jdbc.execute("select pg_advisory_xact_lock(7642394125)");
+            // Opportunistic cleanup on startup, without a timer keeping Neon awake.
+            jdbc.update("delete from spring_session where expiry_time < ?", System.currentTimeMillis());
+            if (jdbc.queryForObject("select count(*) from app_seed where seed_name = 'demo-v1'", Long.class) > 0) return;
+        }
         seedMaisonEtPieces();
         seedObjets();
         seedUtilisateurs();
         seedDonneesCapteur();
         seedHistorique();
         seedScenarios();
+        if (seedOnce) jdbc.update("insert into app_seed(seed_name, completed_at) values ('demo-v1', current_timestamp)");
     }
 
     // ----------------------------------------------------------- maison + pièces

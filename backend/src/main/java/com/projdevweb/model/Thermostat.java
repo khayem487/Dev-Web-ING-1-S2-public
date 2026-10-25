@@ -25,7 +25,8 @@ public class Thermostat extends Capteur {
         public String getLabel() { return label; }
     }
 
-    @Column
+    // Separate from Climatiseur's integer temp_cible in the SINGLE_TABLE hierarchy.
+    @Column(name = "thermostat_temp_cible")
     private Float tempCible;
 
     @Column(length = 16)

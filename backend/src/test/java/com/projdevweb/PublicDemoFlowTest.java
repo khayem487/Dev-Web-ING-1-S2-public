@@ -8,6 +8,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import com.projdevweb.service.VerificationEmailService;
+import com.projdevweb.model.Thermostat;
+import com.projdevweb.model.Climatiseur;
+import com.projdevweb.repository.ObjetConnecteRepository;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -26,6 +29,21 @@ class PublicDemoFlowTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @SpyBean VerificationEmailService mail;
+    @Autowired ObjetConnecteRepository objects;
+
+    @Test
+    void thermostatFractionalTargetAndClimateIntegerTargetHaveIndependentStorage() {
+        Thermostat thermostat = (Thermostat) objects.findAll().stream().filter(o -> o instanceof Thermostat).findFirst().orElseThrow();
+        Climatiseur climate = (Climatiseur) objects.findAll().stream().filter(o -> o instanceof Climatiseur).findFirst().orElseThrow();
+        thermostat.setTempCible(20.5f);
+        thermostat.setMode(Thermostat.ModeThermostat.CHAUFFE.name());
+        climate.setTempCible(24);
+        objects.saveAndFlush(thermostat);
+        objects.saveAndFlush(climate);
+        assertThat(((Thermostat) objects.findById(thermostat.getId()).orElseThrow()).getTempCible()).isEqualTo(20.5f);
+        assertThat(((Thermostat) objects.findById(thermostat.getId()).orElseThrow()).getMode()).isEqualTo("CHAUFFE");
+        assertThat(((Climatiseur) objects.findById(climate.getId()).orElseThrow()).getTempCible()).isEqualTo(24);
+    }
 
     @Test
     void realDemoPreservesRoleGuardsAndAppliesDeviceAndScenarioActions() throws Exception {
