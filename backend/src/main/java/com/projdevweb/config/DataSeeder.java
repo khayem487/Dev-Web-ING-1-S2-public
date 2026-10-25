@@ -52,11 +52,12 @@ import com.projdevweb.repository.PieceRepository;
 import com.projdevweb.repository.ScenarioRepository;
 import com.projdevweb.repository.UtilisateurRepository;
 import com.projdevweb.service.PasswordService;
-import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -81,7 +82,7 @@ import java.util.stream.Collectors;
  * </ul>
  */
 @Component
-public class DataSeeder implements CommandLineRunner {
+public class DataSeeder implements SmartInitializingSingleton {
 
     private static final String DEMO_PASSWORD = "demo1234";
 
@@ -120,8 +121,13 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     @Transactional
-    public void run(String... args) {
+    public void afterSingletonsInstantiated() {
+        // Commit initialization before the web server starts accepting requests.
+        // CommandLineRunner runs after Tomcat listens, exposing empty/uncommitted seeds.
         if (seedOnce) {
+            if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+                throw new IllegalStateException("PostgreSQL demo initialization requires an active transaction");
+            }
             // A transaction lock serializes cold starts, including through a transaction pool.
             jdbc.execute("select pg_advisory_xact_lock(7642394125)");
             // Opportunistic cleanup on startup, without a timer keeping Neon awake.
