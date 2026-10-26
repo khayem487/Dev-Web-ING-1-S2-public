@@ -2,10 +2,12 @@
 
 Le conteneur construit le **frontend React original** puis l'intègre aux ressources statiques du **backend Spring Boot Java 21 original**. Les pages et `/api/*` utilisent le même domaine, ce qui conserve les cookies de session. Le port est fourni par `PORT` et les en-têtes du proxy HTTPS sont pris en charge.
 
-Le profil `vercel-demo` est sélectionné par `Dockerfile.vercel` :
+`Dockerfile.vercel` sélectionne `vercel-demo` par défaut. **Au 26 octobre 2026, la production publique utilise `SPRING_PROFILES_ACTIVE=vercel-demo,postgres`**, avec PostgreSQL Neon Free en région Francfort et Spring Session JDBC. Les données et la même session connectée ont été retrouvées après un vrai redéploiement ; le parcours public complet a été vérifié le 26 octobre.
+
+Le profil `vercel-demo` conserve les règles suivantes :
 
 - Comptes et objets fictifs issus du vrai `DataSeeder`. Les quatre comptes `admin@demo.local`, `parent@demo.local`, `enfant@demo.local`, `voisin@demo.local` utilisent le mot de passe de test documenté `demo1234`.
-- Base H2 **en mémoire et temporaire par instance**, tant qu'aucune base externe n'est configurée. Les mutations et les sessions ne sont pas garanties après redémarrage ou changement d'instance.
+- Sans profil de base externe, H2 reste **en mémoire et temporaire par instance**, avec des sessions locales. Cette configuration de secours ne décrit plus la production publique, raccordée à PostgreSQL.
 - Inscription, vérification et renvoi d'email désactivés dans cette démo : aucun SMTP n'est configuré et aucun email n'est envoyé. Le fonctionnement normal hors profil démo conserve les parcours d'origine.
 - Console H2 désactivée. Cookies HTTPS, HttpOnly et SameSite Lax.
 - API utilisable uniquement depuis la même origine dans ce profil. Les profils, photos, droits, approbations et suppressions des quatre comptes partagés sont protégés côté serveur afin de conserver l'accès des visiteurs suivants ; aucun endpoint existant ne permet de modifier leur email ou mot de passe.
@@ -44,11 +46,17 @@ Le profil MySQL existant peut être combiné avec la démo : `SPRING_PROFILES_AC
 
 Ne jamais placer les valeurs d'accès dans Git. Le pilote MySQL est déjà présent. Ne pas activer ce profil sans une base provisionnée et testée. Le champ health `storage=external-database` identifie le type d'URL configurée, et ne remplace pas une vérification de conservation des données après redéploiement. Aucune promesse de persistance ne repose uniquement sur cette métadonnée.
 
-Cette livraison ne crée aucun compte de base de données, n'accepte aucune condition fournisseur et ne souscrit aucune offre. Une base externe doit être choisie/configurée avant d'annoncer la persistance publique. Les sessions des profils H2/MySQL restent locales ; seul le profil PostgreSQL active Spring Session JDBC.
+L'application Java ne crée pas de compte fournisseur et ne souscrit pas d'offre de base de données au démarrage. La ressource Neon de production a été créée et raccordée séparément avec autorisation ; le profil `vercel-demo,postgres` est actif sur le site public au 26 octobre 2026. Les sessions des profils H2/MySQL restent locales ; seul le profil PostgreSQL active Spring Session JDBC.
 
 ## Vérification
 
-`PublicDemoFlowTest` exerce le contexte Spring, la vraie base de test, les quatre rôles, les refus d'accès, une action d'objet, un scénario manuel et le CSV. `node scripts/verify-demo.mjs https://<alias>` refait le parcours contre le serveur public, vérifie le bundle React, crée/supprime son propre scénario et rétablit l'état de l'objet testé. Ce contrôle n'active ni vrai appareil ni email.
+`PublicDemoFlowTest` exerce le contexte Spring, la vraie base de test, les quatre rôles, les refus d'accès, une action d'objet, un scénario manuel et le CSV. Le contrôle du site public utilise explicitement le stockage externe :
+
+```bash
+node scripts/verify-demo.mjs https://khayem-smart-home.vercel.app --persistent
+```
+
+Ce script vérifie le bundle React, les vrais parcours API, crée/supprime son propre scénario et rétablit l'état de l'objet testé. Il n'active ni vrai appareil ni email. Le flag `--persistent` attend `storage=external-database` ; sans ce flag, le contrôle conserve l'attente H2 `ephemeral-demo` pour la démo locale. `--api-only` permet de ne vérifier que l'API lorsque le frontend est servi séparément.
 
 `PostgresEnvironmentPostProcessorTest` couvre les URL Neon/JDBC, l'extraction des identifiants, le TLS et les erreurs sans secrets. `PostgresRetentionTest` est un test **sur un vrai serveur PostgreSQL local**, activé explicitement avec :
 

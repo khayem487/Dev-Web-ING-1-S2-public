@@ -4,6 +4,20 @@ Projet full-stack **Spring Boot + React/Vite** pour la soutenance ING1.
 
 Objectif : démontrer une maison connectée moderne avec modules complets **Information / Visualisation / Gestion / Administration**, scénarios domotiques, maintenance et UX de présentation.
 
+## 🌐 Démo publique sur Vercel
+
+**[khayem-smart-home.vercel.app](https://khayem-smart-home.vercel.app/)** sert le vrai frontend React et la vraie API Spring Boot sous le même domaine.
+
+Au 26 octobre 2026, la production utilise `SPRING_PROFILES_ACTIVE=vercel-demo,postgres` avec **PostgreSQL Neon Free, région Francfort**, et **Spring Session JDBC**. La conservation des données et de la même session connectée a été confirmée après un vrai redéploiement Vercel. Le parcours public complet a ensuite été vérifié le 26 octobre : quatre rôles, droits, objets, scénarios, CSV et déconnexion.
+
+Les comptes partagés ci-dessous restent protégés. L'inscription et les emails sont désactivés dans cette démo publique. Les objets représentent des appareils logiciels et le scheduler continu reste désactivé.
+
+```bash
+node scripts/verify-demo.mjs https://khayem-smart-home.vercel.app --persistent
+```
+
+Configuration et vérifications détaillées : [docs/VERCEL-DEMO.md](docs/VERCEL-DEMO.md). Les modes locaux H2 et MySQL restent disponibles ci-dessous.
+
 ---
 
 ## ✅ Ce que le projet montre en démo
@@ -43,6 +57,7 @@ Objectif : démontrer une maison connectée moderne avec modules complets **Info
 - **DB** :
   - défaut dev: **H2** (zéro config)
   - option soutenance SQL réelle: **MySQL 8** (Docker)
+  - production Vercel: **PostgreSQL Neon Free** (Francfort), migrations Flyway et sessions JDBC
 
 ---
 

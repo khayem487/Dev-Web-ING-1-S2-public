@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 const base=(process.argv[2]||'http://127.0.0.1:8093').replace(/\/$/,'');
 const apiOnly=process.argv.includes('--api-only');
+const expectedStorage=process.argv.includes('--persistent')?'external-database':'ephemeral-demo';
 const started=Date.now();
 const session=()=>({cookies:new Map()});
 const request=async(path,{actor,method='GET',body,status=200,headers:extraHeaders={}}={})=>{
@@ -35,7 +36,7 @@ const health=(await request('/api/health')).data;
 assert.equal(health.status,'UP');
 assert.equal(health.registrationEnabled,false);
 assert.equal(health.schedulerEnabled,false);
-assert.equal(health.storage,'ephemeral-demo');
+assert.equal(health.storage,expectedStorage);
 const devices=(await request('/api/info/objets')).data;
 assert.ok(Array.isArray(devices)&&devices.length>0);
 await request('/h2-console',{status:404});
